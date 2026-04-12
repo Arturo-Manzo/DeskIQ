@@ -1,0 +1,77 @@
+# === Environment and Secrets ===
+.env
+.env.*
+!.env.example
+
+# === Dependency directories ===
+node_modules/
+artifacts/
+
+# === Build and output folders ===
+# .NET
+bin/
+obj/
+logs/
+
+# Angular/Frontend
+src/deskiq-client/dist/
+src/deskiq-client/.angular/
+src/deskiq-client/node_modules/
+src/deskiq-client/tmp/
+src/deskiq-client/out-tsc/
+src/deskiq-client/.history/
+src/deskiq-client/bazel-out/
+src/deskiq-client/coverage
+
+# === Docker and Compose ===
+init-scripts/
+
+# === IDE/editor-specific ===
+.github/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.sublime-workspace
+*.sublime-project
+.project
+.classpath
+.settings/
+
+# === OS-specific/system files ===
+.DS_Store
+Thumbs.db
+
+# === Log files and misc ===
+*.log
+npm-debug.log
+yarn-error.log
+
+# === Folders for GenAI/code ===
+.agents/
+.claude/
+.copilot/
+.openai/
+.anthropic/
+.mcp/
+.chatgpt/
+.llama/
+.aider/
+.gpt/
+any_ia_output/
+
+# === Miscellaneous/coverage/tmp===
+coverage/
+tmp/
+
+# === In-source/in-project ignores (defense in depth, not necessary if covered above) ===
+/DeskIQ.TicketSystem.sln
+/package-lock.json
+/package.json
+
+# === Exclude logs in API
+src/DeskIQ.TicketSystem.API/logs/
+
+# End of .gitignore
