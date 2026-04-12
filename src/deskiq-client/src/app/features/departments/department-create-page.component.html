@@ -1,0 +1,214 @@
+<section class="ui-page">
+  <div class="ui-page__header">
+    <div>
+      <h1 class="ui-page__title">{{ pageTitle() }}</h1>
+      @if (!isEditMode()) {
+        <p class="ui-page__subtitle">Complete el formulario para crear un nuevo departamento.</p>
+      } @else {
+        <p class="ui-page__subtitle">Complete el formulario para editar el departamento.</p>
+      }
+    </div>
+    <button type="button" class="ui-button ui-button--secondary" (click)="cancel()">
+      Cancelar
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="ui-card ui-card--padded flex items-center justify-center">
+      <div class="text-sm text-[var(--color-muted)]">Cargando departamentos existentes...</div>
+    </div>
+  } @else {
+    <div class="grid gap-6 lg:grid-cols-[1fr_300px]">
+      <article class="ui-card ui-card--padded">
+        @if (error()) {
+          <div class="ui-feedback ui-feedback--error mb-4">
+            <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+            </svg>
+            <span>{{ error() }}</span>
+          </div>
+        }
+
+        @if (similarDepartmentWarning()) {
+          <div class="ui-feedback mb-4">
+            <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <span>{{ similarDepartmentWarning() }}</span>
+          </div>
+        }
+
+        <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-6">
+          <!-- Name -->
+          <div class="space-y-2">
+            <label for="name" class="ui-form-label">Nombre <span class="text-red-400">*</span></label>
+            <input
+              id="name"
+              type="text"
+              formControlName="name"
+              (input)="onNameChange()"
+              class="ui-input"
+              placeholder="Ej: Soporte Técnico"
+            />
+            @if (nameControl?.invalid && nameControl?.touched) {
+              @if (nameControl?.errors?.['required']) {
+                <div class="ui-feedback ui-feedback--error mt-2">
+                  <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs">El nombre es obligatorio.</span>
+                </div>
+              }
+              @if (nameControl?.errors?.['minlength']) {
+                <div class="ui-feedback ui-feedback--error mt-2">
+                  <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs">El nombre debe tener al menos 3 caracteres.</span>
+                </div>
+              }
+            }
+          </div>
+
+          <!-- Code -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <label for="code" class="ui-form-label">Código del Departamento <span class="text-red-400">*</span></label>
+              @if (!isEditMode()) {
+                <button
+                  type="button"
+                  class="ui-button ui-button--secondary"
+                  (click)="suggestCode()"
+                >
+                  Sugerir
+                </button>
+              }
+            </div>
+            <input
+              id="code"
+              type="text"
+              formControlName="code"
+              (input)="onCodeInput()"
+              class="ui-input uppercase tracking-[0.15em]"
+              placeholder="Ej: TI, RH, VE"
+              maxlength="4"
+              [readonly]="isEditMode()"
+            />
+            @if (codeControl?.invalid && codeControl?.touched) {
+              @if (codeControl?.errors?.['required']) {
+                <div class="ui-feedback ui-feedback--error mt-2">
+                  <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs">El codigo es obligatorio.</span>
+                </div>
+              }
+              @if (codeControl?.errors?.['pattern']) {
+                <div class="ui-feedback ui-feedback--error mt-2">
+                  <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs">Use entre 2 y 4 caracteres alfanumericos en mayusculas.</span>
+                </div>
+              }
+            }
+            @if (codeAvailabilityMessage() && !isEditMode()) {
+              <p class="text-xs" [style.color]="codeAvailable() === true ? 'var(--ui-success-text)' : codeAvailable() === null ? 'var(--ui-warning-text)' : 'var(--ui-danger-text)'">
+                {{ codeAvailabilityMessage() }}
+              </p>
+            }
+            @if (isEditMode()) {
+              <p class="text-xs text-[var(--color-muted)]">El código es inmutable una vez creado el departamento.</p>
+            }
+          </div>
+
+          <!-- Description -->
+          <div class="space-y-2">
+            <label for="description" class="ui-form-label">Descripción <span class="text-red-400">*</span></label>
+            <textarea
+              id="description"
+              formControlName="description"
+              rows="5"
+              class="ui-input"
+              placeholder="Describa las funciones y responsabilidades del departamento..."
+            ></textarea>
+            @if (descriptionControl?.invalid && descriptionControl?.touched) {
+              @if (descriptionControl?.errors?.['required']) {
+                <div class="ui-feedback ui-feedback--error mt-2">
+                  <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs">La descripcion es obligatoria.</span>
+                </div>
+              }
+              @if (descriptionControl?.errors?.['minlength']) {
+                <div class="ui-feedback ui-feedback--error mt-2">
+                  <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs">La descripcion debe tener al menos 10 caracteres.</span>
+                </div>
+              }
+            }
+          </div>
+
+          <!-- Auto Assign Rules (Optional) -->
+          <div class="space-y-2">
+            <label for="autoAssignRules" class="ui-form-label">Reglas de Auto-Asignación (JSON opcional)</label>
+            <textarea
+              id="autoAssignRules"
+              formControlName="autoAssignRules"
+              rows="3"
+              class="ui-input"
+              placeholder='{"priority": "high", "roundRobin": true}'
+            ></textarea>
+            <p class="text-xs text-[var(--color-muted)]">Formato JSON opcional para reglas de asignación automática</p>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="flex justify-end gap-3">
+            <button type="button" class="ui-button ui-button--secondary" (click)="cancel()">Cancelar</button>
+            <button type="submit" class="ui-button ui-button--primary" [disabled]="submitting() || form.invalid">
+              @if (submitting()) {
+                <span class="flex items-center gap-2">
+                  <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  @if (isEditMode()) {
+                    Actualizando...
+                  } @else {
+                    Creando...
+                  }
+                </span>
+              } @else {
+                @if (isEditMode()) {
+                  Actualizar Departamento
+                } @else {
+                  Crear Departamento
+                }
+              }
+            </button>
+          </div>
+        </form>
+      </article>
+
+      <!-- Existing Departments List -->
+      <aside class="ui-card ui-card--padded">
+        <h2 class="ui-card__title mb-4">Departamentos Existentes</h2>
+        @if (existingDepartments().length === 0) {
+          <p class="text-sm text-[var(--color-muted)]">No hay departamentos creados aún.</p>
+        } @else {
+          <ul class="space-y-2">
+            @for (dept of existingDepartments(); track dept.id) {
+              <li class="rounded-lg bg-[var(--color-surface-low)] px-3 py-2">
+                <p class="text-sm font-medium">{{ dept.name }} <span class="text-xs text-[var(--color-muted)]">({{ dept.code }})</span></p>
+                <p class="text-xs text-[var(--color-muted)] mt-1 line-clamp-2">{{ dept.description }}</p>
+              </li>
+            }
+          </ul>
+        }
+      </aside>
+    </div>
+  }
+</section>

@@ -1,0 +1,106 @@
+<section class="ui-page">
+  <div class="ui-page__header">
+    <div>
+      <h1 class="ui-page__title">Tickets</h1>
+      <p class="ui-page__subtitle">Vista operativa para seguimiento y priorización.</p>
+    </div>
+    <div class="ui-actions">
+      <button type="button" class="ui-button ui-button--secondary" (click)="load()">
+        Refrescar lista
+      </button>
+      <button type="button" class="ui-button ui-button--primary" [routerLink]="['/tickets/new']">
+        Crear Ticket
+      </button>
+    </div>
+  </div>
+
+  <article class="ui-card">
+    <div class="border-b border-[var(--ui-border-color)] px-6 py-4">
+      <label class="ui-form-label text-xs font-bold uppercase tracking-[0.2em] text-[var(--color-muted)]" for="ticket-search">
+        Buscar
+      </label>
+      <input
+        id="ticket-search"
+        type="search"
+        class="ui-input mt-2"
+        [value]="search()"
+        placeholder="Buscar por titulo, ticket ID, estado, prioridad o departamento"
+        (input)="onSearchChange($any($event.target).value)"
+      />
+    </div>
+
+    @if (loading()) {
+      <div class="p-8 text-center text-sm text-[var(--color-muted)]">Cargando tickets...</div>
+    } @else if (error()) {
+      <div class="ui-feedback ui-feedback--error m-4">
+        <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+        </svg>
+        <span class="text-sm">{{ error() }}</span>
+      </div>
+    } @else if (!filteredTickets().length) {
+      <div class="p-8 text-center text-sm text-[var(--color-muted)]">No hay tickets que coincidan con la búsqueda.</div>
+    } @else {
+      <div class="ui-table-wrap">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th>Ticket</th>
+              <th>Título</th>
+              <th>Estado</th>
+              <th>Prioridad</th>
+              <th>Departamento</th>
+              <th>Última actualización</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (ticket of filteredTickets(); track ticket.id) {
+              <tr>
+                <td class="rounded-l-lg">
+                  <a class="flex items-center gap-1 font-medium text-[var(--color-accent)] hover:underline" [routerLink]="['/tickets', ticket.id]">
+                    {{ ticket.ticketId || ticket.id.slice(0, 8) }}
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                    </svg>
+                  </a>
+                </td>
+                <td>{{ ticket.title }}</td>
+                <td>
+                  {{ getStatusLabel(ticket.status) }}
+                </td>
+                <td>
+                  @if (ticket.priority === 4 || ticket.priority === 3) {
+                    <span class="inline-flex items-center gap-2 text-sm font-bold text-[var(--ui-critical-text)]">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                      </svg>
+                      {{ getPriorityLabel(ticket.priority) }}
+                    </span>
+                  } @else if (ticket.priority === 2) {
+                    <span class="inline-flex items-center gap-2 text-sm font-bold text-amber-500">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                      </svg>
+                      {{ getPriorityLabel(ticket.priority) }}
+                    </span>
+                  } @else if (ticket.priority === 1) {
+                    <span class="inline-flex items-center gap-2 text-sm font-bold text-[var(--ui-success-text)]">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      {{ getPriorityLabel(ticket.priority) }}
+                    </span>
+                  } @else {
+                    <span class="text-sm font-bold">{{ getPriorityLabel(ticket.priority) }}</span>
+                  }
+                </td>
+                <td>{{ ticket.department?.name || ticket.departmentId.slice(0, 8) }}</td>
+                <td class="rounded-r-lg text-[var(--color-muted)]">{{ ticket.updatedAt | date: 'MMM d, HH:mm' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </article>
+</section>

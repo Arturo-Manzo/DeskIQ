@@ -1,0 +1,21 @@
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { catchError, throwError } from 'rxjs';
+import { AuthService } from './auth.service';
+
+export const errorInterceptor: HttpInterceptorFn = (req, next) => {
+  const auth = inject(AuthService);
+
+  return next(req).pipe(
+    catchError((error: unknown) => {
+      if (error instanceof HttpErrorResponse && error.status === 401) {
+        const isLoginRequest = req.url.includes('/api/auth/login');
+        if (!isLoginRequest) {
+          auth.logout();
+        }
+      }
+
+      return throwError(() => error);
+    }),
+  );
+};

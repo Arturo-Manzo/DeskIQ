@@ -1,0 +1,201 @@
+using DeskIQ.TicketSystem.Core.Entities;
+using DeskIQ.TicketSystem.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+
+namespace DeskIQ.TicketSystem.Application.Services;
+
+public class TicketService
+{
+    private readonly AppDbContext _context;
+
+    public TicketService(AppDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<Department?> GetDepartmentAsync(Guid departmentId)
+    {
+        return await _context.Departments.FindAsync(departmentId);
+    }
+
+    public async Task<Ticket?> GetTicketAsync(Guid ticketId)
+    {
+        return await _context.Tickets.FindAsync(ticketId);
+    }
+
+    public async Task<Ticket?> GetTicketWithDetailsAsync(Guid ticketId)
+    {
+        return await _context.Tickets
+            .Include(t => t.CreatedBy)
+            .Include(t => t.AssignedTo)
+            .Include(t => t.Department)
+            .Include(t => t.ParentTicket)
+                .ThenInclude(p => p.AssignedTo)
+            .Include(t => t.ParentTicket)
+                .ThenInclude(p => p.Department)
+            .Include(t => t.Subtickets.OrderBy(s => s.CreatedAt))
+                .ThenInclude(s => s.AssignedTo)
+            .Include(t => t.Messages.OrderBy(m => m.CreatedAt))
+                .ThenInclude(m => m.Sender)
+            .Include(t => t.Attachments)
+                .ThenInclude(a => a.UploadedBy)
+            .FirstOrDefaultAsync(t => t.Id == ticketId);
+    }
+
+    public async Task<bool> ValidateTicketCreationAsync(Guid departmentId, User currentUser)
+    {
+        var department = await _context.Departments.FindAsync(departmentId);
+        if (department == null)
+            return false;
+
+        if (currentUser.Role != UserRole.Admin && departmentId != currentUser.DepartmentId)
+            return false;
+
+        return true;
+    }
+
+    public async Task<bool> ValidateSubticketCreationAsync(Guid parentTicketId, bool isBlocked, string? blockedReason)
+    {
+        if (isBlocked && string.IsNullOrWhiteSpace(blockedReason))
+            return false;
+
+        var parentTicket = await _context.Tickets
+            .Include(t => t.Department)
+            .FirstOrDefaultAsync(t => t.Id == parentTicketId);
+
+        return parentTicket != null;
+    }
+
+    public async Task<(bool IsValid, string? ErrorMessage)> ValidateTicketUpdateAsync(
+        Ticket ticket, 
+        UpdateTicketValidationRequest request)
+    {
+        if (request.IsBlocked == true && string.IsNullOrWhiteSpace(request.BlockedReason) && string.IsNullOrWhiteSpace(ticket.BlockedReason))
+        {
+            return (false, "Blocked reason is required when ticket is blocked");
+        }
+
+        var wantsToCloseParent = ticket.ParentTicketId == null &&
+            (request.Status == TicketStatus.Resolved || request.Status == TicketStatus.Closed);
+
+        if (wantsToCloseParent)
+        {
+            var openSubtickets = await _context.Tickets
+                .Where(t => t.ParentTicketId == ticket.Id &&
+                            t.Status != TicketStatus.Resolved &&
+                            t.Status != TicketStatus.Closed)
+                .ToListAsync();
+
+            if (openSubtickets.Count > 0 && !request.CloseOpenSubticketsWithParent)
+            {
+                return (false, "No se puede cerrar/resolver el ticket padre mientras existan subtickets abiertos.");
+            }
+        }
+
+        var assignmentChanged = request.AssignedToId.HasValue && request.AssignedToId.Value != ticket.AssignedToId;
+        if (assignmentChanged && ticket.ParentTicketId == null &&
+            (ticket.Status == TicketStatus.Resolved || ticket.Status == TicketStatus.Closed))
+        {
+            return (false, "No se puede reasignar un ticket principal resuelto o cerrado.");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<bool> ValidateAttachmentUploadAsync(long fileSize, string fileName, string allowedExtensionsConfig, long maxFileSize)
+    {
+        if (fileSize == 0)
+            return false;
+
+        if (fileSize > maxFileSize)
+            return false;
+
+        var fileExtension = Path.GetExtension(fileName).ToLowerInvariant();
+        var allowedExtensionsList = allowedExtensionsConfig.Split(',').Select(e => e.Trim().ToLowerInvariant()).ToArray();
+        if (!allowedExtensionsList.Contains(fileExtension))
+            return false;
+
+        return true;
+    }
+
+    public async Task<bool> ValidateMessageAdditionAsync(Guid? parentMessageId, Guid ticketId)
+    {
+        if (parentMessageId.HasValue)
+        {
+            var parentMessage = await _context.TicketMessages
+                .FirstOrDefaultAsync(m => m.Id == parentMessageId.Value);
+
+            if (parentMessage == null)
+                return false;
+
+            if (parentMessage.TicketId != ticketId)
+                return false;
+        }
+
+        return true;
+    }
+
+    public static bool CanViewTicket(User user, Ticket ticket)
+    {
+        if (user.Role == UserRole.Admin)
+            return true;
+
+        return user.DepartmentId == ticket.DepartmentId;
+    }
+
+    public static bool CanCommentTicket(User user, Ticket ticket)
+    {
+        if (!CanViewTicket(user, ticket))
+            return false;
+
+        if (user.Role == UserRole.Supervisor)
+            return true;
+
+        if (user.Role == UserRole.Admin)
+            return true;
+
+        return ticket.CreatedById == user.Id || ticket.AssignedToId == user.Id;
+    }
+
+    public static bool CanUpdateTicket(User user, Ticket ticket, UpdateTicketValidationRequest request)
+    {
+        if (!CanViewTicket(user, ticket))
+            return false;
+
+        if (user.Role == UserRole.Admin || user.Role == UserRole.Supervisor)
+            return true;
+
+        var isCreator = ticket.CreatedById == user.Id;
+        var isAssigned = ticket.AssignedToId == user.Id;
+        var takingOwnership =
+            ticket.AssignedToId == null &&
+            request.AssignedToId.HasValue &&
+            request.AssignedToId.Value == user.Id;
+
+        var canReassignPrimaryOpenTicket =
+            ticket.ParentTicketId == null &&
+            request.AssignedToId.HasValue &&
+            ticket.Status != TicketStatus.Resolved &&
+            ticket.Status != TicketStatus.Closed;
+
+        return isCreator || isAssigned || takingOwnership || canReassignPrimaryOpenTicket;
+    }
+
+    public async Task<List<Ticket>> GetOpenSubticketsAsync(Guid parentTicketId)
+    {
+        return await _context.Tickets
+            .Where(t => t.ParentTicketId == parentTicketId &&
+                        t.Status != TicketStatus.Resolved &&
+                        t.Status != TicketStatus.Closed)
+            .ToListAsync();
+    }
+}
+
+public class UpdateTicketValidationRequest
+{
+    public TicketStatus? Status { get; set; }
+    public Guid? AssignedToId { get; set; }
+    public bool? IsBlocked { get; set; }
+    public string? BlockedReason { get; set; }
+    public bool CloseOpenSubticketsWithParent { get; set; }
+}

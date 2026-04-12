@@ -1,0 +1,91 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: deskiq-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-DeskIQ_Tickets}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres123}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - deskiq-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: deskiq-redis
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - deskiq-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Service
+  api:
+    build:
+      context: .
+      dockerfile: src/DeskIQ.TicketSystem.API/Dockerfile
+    container_name: deskiq-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=${POSTGRES_DB:-DeskIQ_Tickets};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres123}
+      - Redis__ConnectionString=redis:6379
+      - Jwt__Key=${JWT_KEY:-change-me-development-key-min-32-chars}
+      - Jwt__Issuer=${JWT_ISSUER:-DeskIQ.TicketSystem}
+      - Jwt__Audience=${JWT_AUDIENCE:-DeskIQ.TicketSystem}
+      - Jwt__ExpireMinutes=${JWT_EXPIRE_MINUTES:-1440}
+      - Cors__AllowedOrigins__0=${CORS_ALLOWED_ORIGIN_0:-http://localhost:4200}
+      - Cors__AllowedOrigins__1=${CORS_ALLOWED_ORIGIN_1:-http://localhost:3000}
+    ports:
+      - "${API_HOST_PORT:-5000}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - deskiq-network
+    volumes:
+      - ./logs:/app/logs
+
+  # Angular Client
+  client:
+    build:
+      context: .
+      dockerfile: src/deskiq-client/Dockerfile
+    container_name: deskiq-client
+    environment:
+      - DESKIQ_FRONTEND_API_BASE_URL=${DESKIQ_FRONTEND_API_BASE_URL:-http://localhost:5000}
+    ports:
+      - "${CLIENT_HOST_PORT:-3000}:80"
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - deskiq-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  deskiq-network:
+    driver: bridge

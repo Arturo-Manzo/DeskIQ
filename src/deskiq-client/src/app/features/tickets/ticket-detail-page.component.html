@@ -1,0 +1,540 @@
+<section class="flex flex-col gap-8 pb-8">
+  @if (loading()) {
+    <article class="rounded-xl bg-white px-5 py-10 text-sm text-[var(--color-muted)] shadow-[0_8px_24px_rgba(0,61,121,0.06)]">
+      Cargando detalle del ticket...
+    </article>
+  } @else if (isInvalidId() || isForbidden() || isNotFound() || error()) {
+    <article class="space-y-4 rounded-xl border border-[var(--ui-danger-border)] bg-[var(--ui-danger-bg)] px-5 py-10 text-sm text-[var(--ui-danger-text)]">
+      <p>{{ error() }}</p>
+      <div class="flex gap-2">
+        <button type="button" class="px-4 py-2 text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors" (click)="backToList()">Volver a tickets</button>
+        @if (!isInvalidId()) {
+          <button type="button" class="px-4 py-2 text-sm font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-deep)] transition-colors" (click)="retryLoad()">Reintentar</button>
+        }
+      </div>
+    </article>
+  } @else if (ticket(); as current) {
+    <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <button type="button" class="pl-0 text-sm font-semibold text-[var(--color-accent)] hover:opacity-70 transition-opacity" (click)="backToList()">
+          &larr; Volver a Tickets
+        </button>
+        <h1 class="ui-page__title mt-2">Ticket {{ current.ticketId || current.id }}</h1>
+        <p class="mt-2 max-w-3xl text-sm text-[var(--color-muted)]">{{ current.title }}</p>
+      </div>
+
+      <div class="ui-actions">
+        <button
+          type="button"
+          class="ui-button ui-button--primary"
+          [disabled]="working() || !selectedAssigneeId() || isPrimaryTicketAssignmentLocked(current.status)"
+          (click)="assignTicket()"
+        >
+          Asignar
+        </button>
+        <button type="button" class="ui-button ui-button--primary" [disabled]="working()" (click)="updateStatus()">Guardar Cambios</button>
+      </div>
+    </div>
+
+    @if (actionError()) {
+      <div class="ui-feedback ui-feedback--error">
+        <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+        </svg>
+        <span class="text-xs">{{ actionError() }}</span>
+      </div>
+    }
+
+    @if (actionSuccess()) {
+      <div class="ui-feedback ui-feedback--success">
+        <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+        </svg>
+        <span class="text-xs">{{ actionSuccess() }}</span>
+      </div>
+    }
+
+    <div class="grid grid-cols-12 gap-6">
+      <div class="col-span-12 space-y-6 xl:col-span-8">
+        <article class="ui-card ui-card--padded">
+          <div class="grid gap-8 md:grid-cols-3">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]">Status</p>
+              <p class="mt-2 inline-flex items-center gap-2 text-sm font-bold text-[var(--color-text)]">
+                <span class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--ui-success-text)]"></span>
+                {{ getStatusLabel(current.status) }}
+              </p>
+            </div>
+
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]">Priority</p>
+              <p class="mt-2 inline-flex items-center gap-2 text-sm font-bold" [ngClass]="getPriorityClass(current.priority)">
+                @if (current.priority >= 3) {
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                  </svg>
+                }
+                {{ getPriorityLabel(current.priority) }}
+              </p>
+            </div>
+
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]">Department</p>
+              <p class="mt-2 text-sm font-bold text-[var(--color-text)]">{{ current.department?.name || current.departmentId }}</p>
+            </div>
+          </div>
+
+          <div class="mt-8 grid gap-8 rounded-lg bg-[var(--color-surface-low)] p-6 md:grid-cols-2">
+            <div>
+              <h3 class="text-sm font-bold text-[var(--color-accent)]">Descripción Detallada</h3>
+              <p class="mt-3 text-sm leading-6 text-[var(--color-muted)]">{{ current.description }}</p>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-[var(--color-accent)]">Archivos Adjuntos ({{ current.attachments?.length || 0 }})</h3>
+                <button type="button" class="ui-button ui-button--primary px-3 py-1.5 text-xs" [disabled]="uploadingFile() || working()" (click)="fileUploadInput?.click()">
+                  <input #fileUploadInput type="file" class="hidden" (change)="onFileSelected($event)" accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.txt,.csv" />
+                  @if (uploadingFile()) {
+                    Subiendo...
+                  } @else {
+                    + Subir
+                  }
+                </button>
+              </div>
+              @if (fileUploadError()) {
+                <div class="ui-feedback ui-feedback--error mt-2">
+                  <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs">{{ fileUploadError() }}</span>
+                </div>
+              }
+              <ul class="mt-3 space-y-2">
+                @if (current.attachments?.length) {
+                  @for (asset of current.attachments; track asset.id) {
+                    <li class="rounded-lg bg-[var(--color-surface-low)] px-3 py-2 text-xs">
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                          <p class="truncate font-medium">{{ asset.fileName }}</p>
+                          <p class="mt-0.5 text-[var(--color-muted)]">{{ asset.contentType }} • {{ formatFileSize(asset.sizeBytes) }}</p>
+                          @if (asset.uploadedBy) {
+                            <p class="mt-0.5 text-[var(--color-muted)]">Subido por {{ asset.uploadedBy.name }}</p>
+                          }
+                        </div>
+                        <div class="flex gap-1">
+                              <!-- Visualizar Button -->
+                              <button
+                                type="button"
+                                class="ui-button ui-button--text p-1.5 text-blue-600 hover:opacity-70 transition-opacity"
+                                [disabled]="!isAttachmentViewable(asset.contentType, asset.fileName) || working()"
+                                (click)="openAttachmentPreview(asset)"
+                                [title]="!isAttachmentViewable(asset.contentType, asset.fileName) ? 'No disponible para este tipo de archivo' : 'Visualizar'"
+                              >
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553 2.276A2 2 0 0121 14.03v1.94A2 2 0 0119.553 18.276L15 20.553A2 2 0 0113 18.03v-1.94A2 2 0 0114.447 14.276L19 12.553A2 2 0 0121 10.03v-1.94A2 2 0 0119.553 6.724L15 4.447A2 2 0 0113 6.47v1.94A2 2 0 0114.447 9.724L19 11.447A2 2 0 0121 13.97v1.94A2 2 0 0119.553 18.275L15 20.552"></path>
+                                </svg>
+                              </button>
+                          <button type="button" class="ui-button ui-button--text p-1.5 text-[var(--color-accent)] hover:opacity-70 transition-opacity" [disabled]="working()" (click)="downloadAttachment(asset.id, asset.fileName)" title="Descargar">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                          </button>
+                          <button type="button" class="ui-button ui-button--text p-1.5 text-[var(--ui-danger-text)] hover:opacity-70 transition-opacity" [disabled]="working()" (click)="deleteAttachment(asset.id)" title="Eliminar">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  }
+                } @else {
+                  <li class="rounded-lg bg-[var(--color-surface-low)] px-3 py-4 text-xs text-[var(--color-muted)]">No hay archivos adjuntos</li>
+                }
+              </ul>
+            </div>
+          </div>
+
+          <div class="mt-8 rounded-lg bg-[var(--color-surface-low)] p-6">
+            <h3 class="text-xs font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]">Actividad del Timeline</h3>
+            @if (activities().length) {
+              <ul class="mt-4 space-y-6 border-l-2 border-[color:color-mix(in_srgb,var(--color-accent)_15%,transparent)] pl-5 text-sm">
+                @for (activity of activities(); track activity.id) {
+                  <li class="relative">
+                    <span class="absolute -left-[1.38rem] top-0 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--color-accent)] ring-4 ring-white text-xs">
+                      {{ getActivityIcon(activity.type) }}
+                    </span>
+                    <p class="font-semibold">{{ getActivityDescription(activity) }}</p>
+                    <p class="text-xs text-[var(--color-muted)]">{{ activity.performedBy.name }} • {{ activity.createdAt | date: 'MMM d, y • HH:mm' }}</p>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="mt-4 text-xs text-[var(--color-muted)]">No hay actividades aún.</p>
+            }
+          </div>
+        </article>
+
+        <article class="space-y-4">
+          <h2 class="ui-card__title">Colaboración</h2>
+
+          <div class="overflow-hidden rounded-xl bg-white shadow-[0_8px_24px_rgba(0,61,121,0.05)]">
+            <div class="space-y-4 p-6">
+              @if (current.messages?.length) {
+                <ul class="space-y-3">
+                  @for (message of getRootMessages(); track message.id) {
+                    <li class="rounded-lg bg-[var(--color-surface-low)] p-4">
+                      <div class="flex items-center justify-between gap-2">
+                        <p class="text-sm font-bold">{{ message.senderName || message.senderEmail || 'Usuario' }}</p>
+                        <p class="text-xs text-[var(--color-muted)]">{{ message.createdAt | date: 'MMM d, HH:mm' }}</p>
+                      </div>
+
+                      <p class="mt-2 text-sm text-[var(--color-muted)]">{{ message.content }}</p>
+
+                      <div class="mt-3">
+                        <button type="button" class="text-[var(--color-accent)] hover:opacity-70 transition-opacity" [disabled]="working()" (click)="openReplyModal(message.id)">
+                          Responder
+                        </button>
+                      </div>
+
+                      @if (getReplies(message.id).length) {
+                        <ul class="mt-3 space-y-2 border-l-2 border-[var(--color-accent)] pl-3">
+                          @for (reply of getReplies(message.id); track reply.id) {
+                            <li class="rounded-md bg-white p-3">
+                              <p class="text-xs font-semibold">{{ reply.senderName || reply.senderEmail || 'Usuario' }}</p>
+                              <p class="mt-1 text-sm text-[var(--color-muted)]">{{ reply.content }}</p>
+                            </li>
+                          }
+                        </ul>
+                      }
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="text-sm text-[var(--color-muted)]">Sin mensajes aún.</p>
+              }
+            </div>
+
+            <div class="bg-[var(--color-surface-low)] p-4">
+              <textarea
+                class="ui-input min-h-24"
+                [value]="comment()"
+                [disabled]="working()"
+                placeholder="Escribe un comentario o publica una actualización..."
+                (input)="onCommentChange($any($event.target).value)"
+              ></textarea>
+
+              <div class="mt-3 flex justify-end">
+                <button type="button" class="ui-button ui-button--primary" [disabled]="working() || !comment().trim()" (click)="addComment()">
+                  Publicar Comentario
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <aside class="col-span-12 space-y-6 xl:col-span-4">
+        <article class="ui-card ui-card--padded">
+          <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Profesional Asignado</h3>
+
+          <div class="mt-4 rounded-lg bg-[var(--color-surface-low)] p-4">
+            <p class="text-sm font-bold">{{ current.assignedTo?.name || 'Unassigned' }}</p>
+            <p class="text-xs text-[var(--color-muted)]">{{ current.assignedTo?.email || 'No email available' }}</p>
+          </div>
+
+          <label class="mt-4 block text-xs font-semibold uppercase tracking-[0.1em] text-[var(--color-muted)]">
+            Reasignar ticket
+            <select
+              class="ui-input mt-2 rounded-md"
+              [disabled]="working() || !assignees().length || isPrimaryTicketAssignmentLocked(current.status)"
+              [value]="selectedAssigneeId()"
+              (change)="onAssigneeChange($any($event.target).value)"
+            >
+              <option value="">Seleccionar asignado</option>
+              @for (user of assignees(); track user.id) {
+                <option [value]="user.id">{{ user.name }}</option>
+              }
+            </select>
+          </label>
+
+          <div class="mt-4">
+            <button
+              type="button"
+              class="ui-button ui-button--primary w-full"
+              [disabled]="working() || !selectedAssigneeId() || isPrimaryTicketAssignmentLocked(current.status)"
+              (click)="assignTicket()"
+            >
+              Reasignar Ticket
+            </button>
+          </div>
+        </article>
+
+        <article class="ui-card ui-card--padded">
+          <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Flujo de Trabajo</h3>
+
+          <label class="mt-3 block text-xs font-semibold uppercase tracking-[0.1em] text-[var(--color-muted)]">
+            Estado
+            <select
+              class="ui-input mt-2 rounded-md"
+              [disabled]="working()"
+              (change)="onStatusChange($any($event.target).value)"
+            >
+              @for (status of statuses; track status.value) {
+                <option
+                  [value]="status.value"
+                  [selected]="status.value === selectedStatus()"
+                >
+                  {{ status.label }}
+                </option>
+              }
+            </select>
+          </label>
+
+          <div class="mt-4">
+            <button type="button" class="ui-button ui-button--primary w-full" [disabled]="working()" (click)="updateStatus()">Guardar</button>
+          </div>
+        </article>
+
+        <article class="ui-card ui-card--padded">
+          <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Metadatos del Ticket</h3>
+          <dl class="mt-3 space-y-3 text-xs">
+            <div>
+              <dt class="uppercase tracking-[0.08em] text-[var(--color-muted)]">Creado el</dt>
+              <dd class="mt-1 text-sm font-semibold">{{ current.createdAt | date: 'd MMM y, HH:mm' }}</dd>
+            </div>
+            <div>
+              <dt class="uppercase tracking-[0.08em] text-[var(--color-muted)]">Última actualización</dt>
+              <dd class="mt-1 text-sm font-semibold">{{ current.updatedAt | date: 'd MMM y, HH:mm' }}</dd>
+            </div>
+            <div>
+              <dt class="uppercase tracking-[0.08em] text-[var(--color-muted)]">Resolución SLA</dt>
+              <dd class="mt-1 text-sm font-semibold">{{ current.resolvedAt ? 'Resuelto' : 'En progreso' }}</dd>
+            </div>
+          </dl>
+        </article>
+
+        @if (current.parentTicket) {
+          <article class="ui-card ui-card--padded">
+            <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Ticket Padre</h3>
+            <div class="mt-3 rounded-md bg-[var(--color-surface-low)] px-3 py-2 text-xs">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex-1">
+                  <p class="font-semibold">{{ current.parentTicket.ticketId }}</p>
+                  <p class="mt-1 truncate font-medium">{{ current.parentTicket.title }}</p>
+                  <div class="mt-2 flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold" [ngClass]="getParentTicketStatusClass(current.parentTicket.status)">
+                      {{ getStatusLabel(current.parentTicket.status) }}
+                    </span>
+                    @if (current.parentTicket.priority >= 3) {
+                      <svg class="h-3.5 w-3.5 text-[var(--ui-critical-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                      </svg>
+                    }
+                  </div>
+                  @if (current.parentTicket.assignedTo) {
+                    <p class="mt-1 text-[var(--color-muted)]">Asignado a: {{ current.parentTicket.assignedTo.name }}</p>
+                  }
+                  @if (current.parentTicket.resolvedAt) {
+                    <p class="mt-1 text-[var(--color-muted)]">Resuelto: {{ current.parentTicket.resolvedAt | date: 'd MMM y, HH:mm' }}</p>
+                  }
+                </div>
+                <a class="flex items-center gap-1 font-medium text-[var(--color-accent)] hover:underline transition-opacity" [routerLink]="['/tickets', current.parentTicket.id]">
+                  Abrir
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </article>
+        }
+
+        <article class="ui-card ui-card--padded">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Subtickets</h3>
+            <button type="button" class="ui-button ui-button--primary" [disabled]="working()" (click)="openSubticketModal()">Agregar</button>
+          </div>
+
+          @if (subtickets().length) {
+            <ul class="mt-3 space-y-2">
+              @for (subticket of subtickets(); track subticket.id) {
+                <li class="rounded-md bg-[var(--color-surface-low)] px-3 py-2 text-xs">
+                  <p class="truncate font-semibold">{{ subticket.title }}</p>
+                  <p class="mt-1 text-[var(--color-muted)]">{{ getStatusLabel(subticket.status) }} • {{ getPriorityLabel(subticket.priority) }}</p>
+                  <button type="button" class="mt-2 flex items-center gap-1 font-medium text-[var(--color-accent)] hover:underline transition-opacity" (click)="openSubticketDetail(subticket.id)">
+                    Abrir
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                    </svg>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="mt-3 text-xs text-[var(--color-muted)]">No hay subtickets aún.</p>
+          }
+        </article>
+
+      </aside>
+    </div>
+  }
+
+  @if (replyModalOpen()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div class="w-full max-w-xl space-y-4 rounded-xl bg-white p-5 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-[0.12em]">Responder Mensaje</h3>
+          <button type="button" class="text-[var(--color-accent)] hover:opacity-70 transition-opacity" (click)="closeReplyModal()">Cerrar</button>
+        </div>
+
+        <p class="rounded-md bg-[var(--color-surface-low)] px-3 py-2 text-xs text-[var(--color-muted)]">
+          {{ replyToMessageSummary() }}
+        </p>
+
+        <textarea
+          class="ui-input min-h-28"
+          [value]="replyContent()"
+          [disabled]="working()"
+          placeholder="Escribe tu respuesta..."
+          (input)="onReplyContentChange($any($event.target).value)"
+        ></textarea>
+
+        <div class="flex justify-end gap-2">
+          <button type="button" class="ui-button ui-button--secondary" [disabled]="working()" (click)="closeReplyModal()">Cancelar</button>
+          <button type="button" class="ui-button ui-button--primary" [disabled]="working() || !replyContent().trim()" (click)="submitReply()">
+            Publicar Respuesta
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (subticketModalOpen()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div class="w-full max-w-2xl space-y-4 rounded-xl bg-white p-5 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-[0.12em]">Crear Subticket</h3>
+          <button type="button" class="text-[var(--color-accent)] hover:opacity-70 transition-opacity" (click)="closeSubticketModal()">Cerrar</button>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="space-y-1 text-xs uppercase tracking-[0.1em] text-[var(--color-muted)]">
+            Título
+            <input
+              type="text"
+              class="ui-input rounded-md"
+              [value]="subticketTitle()"
+              [disabled]="working()"
+              (input)="onSubticketTitleChange($any($event.target).value)"
+            />
+          </label>
+
+          <label class="space-y-1 text-xs uppercase tracking-[0.1em] text-[var(--color-muted)]">
+            Prioridad
+            <select
+              class="ui-input rounded-md"
+              [value]="subticketPriority()"
+              [disabled]="working()"
+              (change)="onSubticketPriorityChange($any($event.target).value)"
+            >
+              <option value="1">Baja</option>
+              <option value="2">Media</option>
+              <option value="3">Alta</option>
+              <option value="4">Crítica</option>
+            </select>
+          </label>
+
+          <label class="space-y-1 text-xs uppercase tracking-[0.1em] text-[var(--color-muted)] sm:col-span-2">
+            Descripción
+            <textarea
+              class="ui-input min-h-20 rounded-md"
+              [value]="subticketDescription()"
+              [disabled]="working()"
+              (input)="onSubticketDescriptionChange($any($event.target).value)"
+            ></textarea>
+          </label>
+
+          <label class="space-y-1 text-xs uppercase tracking-[0.1em] text-[var(--color-muted)]">
+            Asignar a
+            <select
+              class="ui-input rounded-md"
+              [value]="subticketAssigneeId()"
+              [disabled]="working()"
+              (change)="onSubticketAssigneeChange($any($event.target).value)"
+            >
+              <option value="">Sin asignar</option>
+              @for (user of assignees(); track user.id) {
+                <option [value]="user.id">{{ user.name }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="flex items-center gap-2 text-xs uppercase tracking-[0.1em] text-[var(--color-muted)]">
+            <input
+              type="checkbox"
+              [checked]="subticketBlocked()"
+              [disabled]="working()"
+              (change)="onSubticketBlockedChange($any($event.target).checked)"
+            />
+            Bloqueado por compra
+          </label>
+
+          @if (subticketBlocked()) {
+            <label class="space-y-1 text-xs uppercase tracking-[0.1em] text-[var(--color-muted)] sm:col-span-2">
+              Motivo de bloqueo
+              <input
+                type="text"
+                class="ui-input rounded-md"
+                [value]="subticketBlockedReason()"
+                [disabled]="working()"
+                (input)="onSubticketBlockedReasonChange($any($event.target).value)"
+              />
+            </label>
+          }
+        </div>
+
+        <div class="flex justify-end gap-2">
+          <button type="button" class="ui-button ui-button--secondary" [disabled]="working()" (click)="closeSubticketModal()">Cancelar</button>
+          <button type="button" class="ui-button ui-button--primary" [disabled]="working()" (click)="createSubticket()">Crear</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (attachmentPreviewModalOpen()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div class="w-full max-w-2xl space-y-4 rounded-xl bg-white p-5 shadow-2xl relative">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-[0.12em]">Visualizar Archivo</h3>
+          <button type="button" class="text-[var(--color-accent)] hover:opacity-70 transition-opacity" (click)="closeAttachmentPreview()">Cerrar</button>
+        </div>
+        <!-- Attachment preview body -->
+        <div class="mt-4 min-h-[250px] flex items-center justify-center">
+          @if (attachmentPreviewError()) {
+            <p class="text-sm text-[var(--ui-danger-text)]">{{ attachmentPreviewError() }}</p>
+          } @else if (!attachmentPreviewUrl()) {
+            <p class="text-xs text-[var(--color-muted)]">Cargando archivo...</p>
+          } @else if (isAttachmentViewable(attachmentPreviewAsset()?.contentType, attachmentPreviewAsset()?.fileName)) {
+            @if (attachmentPreviewAsset()?.contentType?.startsWith('image/') || isAttachmentViewable(attachmentPreviewAsset()?.contentType, attachmentPreviewAsset()?.fileName) && attachmentPreviewAsset()?.fileName?.match(/\.(png|jpe?g|gif|webp|svg)$/i)) {
+              <img [src]="attachmentPreviewUrl()" class="max-h-96 max-w-full object-contain rounded" alt="Vista previa imagen" />
+            } @else {
+              <!-- PDF -->
+              <object [data]="attachmentPreviewUrl()" type="application/pdf" width="100%" height="480">
+                <p>No se pudo visualizar el PDF. <a [href]="attachmentPreviewUrl()" target="_blank" rel="noopener">Descargar</a></p>
+              </object>
+            }
+          } @else {
+            <p class="text-xs text-[var(--color-muted)]">No disponible para este tipo de archivo.</p>
+          }
+        </div>
+        <div class="mt-4 flex items-center gap-2">
+          <span class="text-xs font-medium text-[var(--color-muted)]">{{ attachmentPreviewAsset()?.fileName }}</span>
+          <span class="text-xs text-[var(--color-muted)]">•</span>
+          <span class="text-xs text-[var(--color-muted)]">{{ attachmentPreviewAsset()?.contentType }}</span>
+        </div>
+      </div>
+    </div>
+  }
+</section>

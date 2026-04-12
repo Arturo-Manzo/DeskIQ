@@ -1,0 +1,176 @@
+<section class="ui-page">
+  <div class="ui-page__header">
+    <div>
+      <h1 class="ui-page__title">Crear Nuevo Ticket</h1>
+      <p class="ui-page__subtitle">Complete el formulario para crear un nuevo ticket de soporte.</p>
+    </div>
+    <div class="ui-actions">
+      <button type="button" class="ui-button ui-button--secondary" (click)="cancel()">
+        Cancelar
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="ui-card ui-card--padded flex items-center justify-center">
+      <div class="text-sm text-[var(--color-muted)]">Cargando departamentos...</div>
+    </div>
+  } @else {
+    <article class="ui-card ui-card--padded">
+      @if (error()) {
+        <div class="ui-feedback ui-feedback--error mb-4">
+          <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+          </svg>
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-6">
+        <!-- Title -->
+        <div class="space-y-2">
+          <label for="title" class="ui-form-label">Título <span class="text-red-400">*</span></label>
+          <input
+            id="title"
+            type="text"
+            formControlName="title"
+            class="ui-input"
+            placeholder="Ej: Problema con el acceso al sistema"
+          />
+          @if (titleControl?.invalid && titleControl?.touched) {
+            @if (titleControl?.errors?.['required']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El titulo es obligatorio.</span>
+              </div>
+            }
+            @if (titleControl?.errors?.['minlength']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El titulo debe tener al menos 3 caracteres.</span>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Description -->
+        <div class="space-y-2">
+          <label for="description" class="ui-form-label">Descripción <span class="text-red-400">*</span></label>
+          <textarea
+            id="description"
+            formControlName="description"
+            rows="5"
+            class="ui-input"
+            placeholder="Describa detalladamente el problema o solicitud..."
+          ></textarea>
+          @if (descriptionControl?.invalid && descriptionControl?.touched) {
+            @if (descriptionControl?.errors?.['required']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">La descripcion es obligatoria.</span>
+              </div>
+            }
+            @if (descriptionControl?.errors?.['minlength']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">La descripcion debe tener al menos 10 caracteres.</span>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Priority -->
+        <div class="space-y-2">
+          <label for="priority" class="ui-form-label">Prioridad <span class="text-red-400">*</span></label>
+          <select
+            id="priority"
+            formControlName="priority"
+            class="ui-input"
+          >
+            <option [ngValue]="1">Baja</option>
+            <option [ngValue]="2">Media</option>
+            <option [ngValue]="3">Alta</option>
+            <option [ngValue]="4">Crítica</option>
+          </select>
+        </div>
+
+        <!-- Department -->
+        <div class="space-y-2">
+          <label for="departmentId" class="ui-form-label">Departamento <span class="text-red-400">*</span></label>
+          <select
+            id="departmentId"
+            formControlName="departmentId"
+            (change)="onDepartmentChange(departmentIdControl?.value)"
+            class="ui-input"
+          >
+            <option value="">Seleccione un departamento</option>
+            @for (dept of departments(); track dept.id) {
+              <option [ngValue]="dept.id">{{ dept.name }}</option>
+            }
+          </select>
+          @if (departmentIdControl?.invalid && departmentIdControl?.touched) {
+            <div class="ui-feedback ui-feedback--error mt-2">
+              <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              <span class="text-xs">El departamento es obligatorio.</span>
+            </div>
+          }
+        </div>
+
+        <!-- Assigned To (conditional) -->
+        @if (canAssign()) {
+          <div class="space-y-2">
+            <label for="assignedToId" class="ui-form-label">Asignar a (opcional)</label>
+            <select
+              id="assignedToId"
+              formControlName="assignedToId"
+              class="ui-input"
+            >
+              <option value="">Sin asignar</option>
+              @for (user of users(); track user.id) {
+                <option [ngValue]="user.id">{{ user.name }} ({{ user.email }})</option>
+              }
+            </select>
+          </div>
+        }
+
+        <!-- Submit Button -->
+        <div class="flex justify-end gap-3 pt-4">
+          <button
+            type="button"
+            class="ui-button ui-button--secondary"
+            (click)="cancel()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            class="ui-button ui-button--primary"
+            [disabled]="submitting() || form.invalid"
+          >
+            @if (submitting()) {
+              <span class="flex items-center gap-2">
+                <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Creando...
+              </span>
+            } @else {
+              Crear Ticket
+            }
+          </button>
+        </div>
+      </form>
+    </article>
+  }
+</section>
