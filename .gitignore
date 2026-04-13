@@ -23,9 +23,6 @@ src/deskiq-client/.history/
 src/deskiq-client/bazel-out/
 src/deskiq-client/coverage
 
-# ui-design-system submodule (git submodule managed separately)
-ui-design-system/
-
 # === Docker and Compose ===
 
 # === IDE/editor-specific ===

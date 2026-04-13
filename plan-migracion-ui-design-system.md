@@ -59,20 +59,17 @@ Centralizar el sistema visual de DeskIQ integrando la librería Angular `ui-desi
 - Eliminar o refactorizar duplicados para evitar sobre-especificidad o inconsistencia visual.
 
 ### b. Integración de la dependencia
-1. `ui-design-system` está configurado como **git submodule** conectado a https://github.com/Arturo-Manzo/ui-design-system.git
-2. La dependencia en `package.json` usa la copia local:
+1. `ui-design-system` se instala desde GitHub usando git+https:
    ```json
-   "ui-design-system": "file:../../../ui-design-system/dist/ui-design-system"
+   "ui-design-system": "git+https://github.com/Arturo-Manzo/ui-design-system.git"
    ```
-3. Para actualizar el submodule desde GitHub:
-   ```bash
-   cd ui-design-system
-   git pull
-   npm install
-   npm run build
-   cd ../src/deskiq-client
-   npm install
-   ```
+2. El repositorio de GitHub tiene:
+   - `private: false` en package.json
+   - Script `prepare` que ejecuta `npm run build` automáticamente
+   - Script `prepare` copia los archivos compilados a la raíz del paquete
+3. npm clona el repositorio, ejecuta el script prepare (build), y copia los archivos necesarios
+
+**Nota**: No hay copia local de ui-design-system en el repo DeskIQ. Se instala directamente desde GitHub.
 
 ### c. Importación de estilos globales
 - En `src/styles.css` o `src/styles.scss`, agregar:
@@ -157,27 +154,25 @@ Centralizar el sistema visual de DeskIQ integrando la librería Angular `ui-desi
 
 Para actualizar ui-design-system a una nueva versión desde GitHub:
 
-1. Actualizar el submodule:
+1. Limpiar el caché de npm y reinstalar:
    ```bash
-   cd ui-design-system
-   git fetch
-   git checkout vX.Y.Z  # o git pull para la última versión
-   npm install
-   npm run build
+   cd src/deskiq-client
+   npm cache clean --force
+   npm uninstall ui-design-system
+   npm install git+https://github.com/Arturo-Manzo/ui-design-system.git#vX.Y.Z
    ```
 
-2. Actualizar DeskIQ:
+   O para la última versión:
    ```bash
-   cd ../src/deskiq-client
-   npm install
+   npm install git+https://github.com/Arturo-Manzo/ui-design-system.git
    ```
 
-3. Validar que la build funciona correctamente:
+2. Validar que la build funciona correctamente:
    ```bash
    npm run build
    ```
 
-**Nota**: El repositorio de GitHub tiene `"private": true` en su package.json, por lo que no se puede publicar en npm registry. El git submodule permite mantener la conexión con GitHub mientras se usa la copia local para el build.
+**Nota**: npm clona el repositorio, ejecuta el script prepare (build), y copia los archivos compilados automáticamente. No se requiere intervención manual.
 
 ---
 

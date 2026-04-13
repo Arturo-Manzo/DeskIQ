@@ -33,7 +33,7 @@
     "@microsoft/signalr": "^10.0.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
-    "ui-design-system": "file:../../../ui-design-system/dist/ui-design-system",
+    "ui-design-system": "github:Arturo-Manzo/ui-design-system",
     "zone.js": "~0.15.0"
   },
   "devDependencies": {
