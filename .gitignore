@@ -23,8 +23,10 @@ src/deskiq-client/.history/
 src/deskiq-client/bazel-out/
 src/deskiq-client/coverage
 
+# ui-design-system submodule (git submodule managed separately)
+ui-design-system/
+
 # === Docker and Compose ===
-init-scripts/
 
 # === IDE/editor-specific ===
 .github/
@@ -48,6 +50,23 @@ Thumbs.db
 *.log
 npm-debug.log
 yarn-error.log
+
+# === SQL scripts (ignore temp queries, keep init-scripts) ===
+*.sql
+!init-scripts/*.sql
+
+# === Defensive rules for temp files ===
+*.bak
+*.swp
+*.tmp
+*.swo
+*~
+*.pyc
+*.pyo
+__pycache__/
+*.pid
+*.seed
+*.pid.lock
 
 # === Folders for GenAI/code ===
 .agents/
