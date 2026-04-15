@@ -1,0 +1,254 @@
+<section class="ui-page">
+  <div class="ui-page__header">
+    <div>
+      <h1 class="ui-page__title">Crear Nuevo Usuario</h1>
+      <p class="ui-page__subtitle">Complete el formulario para crear un nuevo usuario en el sistema.</p>
+    </div>
+    <div class="ui-actions">
+      <button type="button" appButton="secondary" buttonSize="md" (click)="cancel()">
+        Cancelar
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="ui-card ui-card--padded flex items-center justify-center">
+      <div class="text-sm text-[var(--color-muted)]">Cargando departamentos...</div>
+    </div>
+  } @else {
+    <article class="ui-card ui-card--padded">
+      @if (error()) {
+        <div class="ui-feedback ui-feedback--error mb-4">
+          <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+          </svg>
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-6">
+        <!-- SSO Toggle -->
+        <div class="flex items-center gap-3 p-4 bg-blue-50 rounded-lg">
+          <input
+            type="checkbox"
+            id="isSSOUser"
+            [checked]="isSSOUser()"
+            (change)="onSSOToggle()"
+            class="w-4 h-4 text-blue-600 rounded"
+          />
+          <label for="isSSOUser" class="text-sm font-medium text-gray-700">
+            Usuario SSO (proveniente de proveedor de identidad)
+          </label>
+        </div>
+
+        @if (isSSOUser()) {
+          <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p class="text-xs text-yellow-800">
+              <strong>Nota:</strong> Los usuarios SSO no requieren contraseña. El sistema utilizará el proveedor de identidad para autenticación.
+            </p>
+          </div>
+        }
+
+        <!-- Name -->
+        <div class="space-y-2">
+          <label for="name" class="ui-form-label">Nombre <span class="text-red-400">*</span></label>
+          <input
+            id="name"
+            type="text"
+            formControlName="name"
+            class="ui-input"
+            placeholder="Ej: Juan Pérez"
+          />
+          @if (nameControl?.invalid && nameControl?.touched) {
+            @if (nameControl?.errors?.['required']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El nombre es obligatorio.</span>
+              </div>
+            }
+            @if (nameControl?.errors?.['minlength']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El nombre debe tener al menos 2 caracteres.</span>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Email -->
+        <div class="space-y-2">
+          <label for="email" class="ui-form-label">Email <span class="text-red-400">*</span></label>
+          <input
+            id="email"
+            type="email"
+            formControlName="email"
+            class="ui-input"
+            placeholder="Ej: juan.perez@empresa.com"
+          />
+          @if (emailControl?.invalid && emailControl?.touched) {
+            @if (emailControl?.errors?.['required']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El email es obligatorio.</span>
+              </div>
+            }
+            @if (emailControl?.errors?.['email']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El email no es válido.</span>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Password (conditional) -->
+        @if (!isSSOUser()) {
+          <div class="space-y-2">
+            <label for="password" class="ui-form-label">Contraseña <span class="text-red-400">*</span></label>
+            <input
+              id="password"
+              type="password"
+              formControlName="password"
+              class="ui-input"
+              placeholder="Mínimo 6 caracteres"
+            />
+            @if (passwordControl?.invalid && passwordControl?.touched) {
+              @if (passwordControl?.errors?.['minlength']) {
+                <div class="ui-feedback ui-feedback--error mt-2">
+                  <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs">La contraseña debe tener al menos 6 caracteres.</span>
+                </div>
+              }
+            }
+          </div>
+        }
+
+        <!-- Department -->
+        <div class="space-y-2">
+          <label for="departmentId" class="ui-form-label">Departamento <span class="text-red-400">*</span></label>
+          <select
+            id="departmentId"
+            formControlName="departmentId"
+            class="ui-input"
+          >
+            <option value="">Seleccione un departamento</option>
+            @for (dept of departments(); track dept.id) {
+              <option [ngValue]="dept.id">{{ dept.name }}</option>
+            }
+          </select>
+          @if (departmentIdControl?.invalid && departmentIdControl?.touched) {
+            <div class="ui-feedback ui-feedback--error mt-2">
+              <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              <span class="text-xs">El departamento es obligatorio.</span>
+            </div>
+          }
+        </div>
+
+        <!-- Role -->
+        <div class="space-y-2">
+          <label for="role" class="ui-form-label">Rol <span class="text-red-400">*</span></label>
+          <select
+            id="role"
+            formControlName="role"
+            class="ui-input"
+          >
+            <option [ngValue]="1">Cliente</option>
+            <option [ngValue]="2">Cliente Supervisor</option>
+            <option [ngValue]="3">Operador</option>
+            <option [ngValue]="4">Operador Supervisor</option>
+            <option [ngValue]="5">Supervisor General</option>
+            <option [ngValue]="6">Auditor</option>
+            <option [ngValue]="7">Administrador</option>
+          </select>
+        </div>
+
+        <!-- ExtId (SSO only) -->
+        @if (isSSOUser()) {
+          <div class="space-y-2">
+            <label for="extId" class="ui-form-label">ID Externo (SSO) <span class="text-red-400">*</span></label>
+            <input
+              id="extId"
+              type="text"
+              formControlName="extId"
+              class="ui-input"
+              placeholder="ID del usuario en el proveedor de identidad"
+            />
+            <p class="text-xs text-[var(--color-muted)]">
+              Este es el identificador único del usuario en el proveedor SSO (ej: Azure AD ObjectId, Okta ID, etc.)
+            </p>
+            @if (extIdControl?.invalid && extIdControl?.touched) {
+              @if (extIdControl?.errors?.['required']) {
+                <div class="ui-feedback ui-feedback--error mt-2">
+                  <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs">El ID externo es obligatorio para usuarios SSO.</span>
+                </div>
+              }
+            }
+          </div>
+        }
+
+        <!-- Department Pending Assign (SSO only) -->
+        @if (isSSOUser()) {
+          <div class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="departmentPendingAssign"
+              formControlName="departmentPendingAssign"
+              class="w-4 h-4 text-blue-600 rounded"
+            />
+            <label for="departmentPendingAssign" class="text-sm text-gray-700">
+              Marcar para asignación de departamento pendiente
+            </label>
+          </div>
+          <p class="text-xs text-[var(--color-muted)] ml-7">
+            Úselo si el usuario viene de SSO pero aún no tiene departamento asignado. El admin podrá asignarlo más tarde.
+          </p>
+        }
+
+        <!-- Submit Button -->
+        <div class="flex justify-end gap-3 pt-4">
+          <button
+            type="button"
+            appButton="secondary"
+            buttonSize="md"
+            (click)="cancel()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            appButton="primary"
+            buttonSize="md"
+            [disabled]="submitting() || form.invalid"
+          >
+            @if (submitting()) {
+              <span class="flex items-center gap-2">
+                <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Creando...
+              </span>
+            } @else {
+              Crear Usuario
+            }
+          </button>
+        </div>
+      </form>
+    </article>
+  }
+</section>

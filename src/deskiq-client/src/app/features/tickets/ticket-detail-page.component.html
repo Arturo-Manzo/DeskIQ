@@ -7,32 +7,19 @@
     <article class="space-y-4 rounded-xl border border-[var(--ui-danger-border)] bg-[var(--ui-danger-bg)] px-5 py-10 text-sm text-[var(--ui-danger-text)]">
       <p>{{ error() }}</p>
       <div class="flex gap-2">
-        <button type="button" class="px-4 py-2 text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors" (click)="backToList()">Volver a tickets</button>
+        <button type="button" appButton="danger" buttonSize="md" class="px-4 py-2 text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors" (click)="backToList()">Volver a tickets</button>
         @if (!isInvalidId()) {
-          <button type="button" class="px-4 py-2 text-sm font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-deep)] transition-colors" (click)="retryLoad()">Reintentar</button>
+          <button type="button" appButton="primary" buttonSize="md" class="px-4 py-2 text-sm font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-deep)] transition-colors" (click)="retryLoad()">Reintentar</button>
         }
       </div>
     </article>
   } @else if (ticket(); as current) {
     <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-      <div>
+      <div class="flex-1">
         <button type="button" class="pl-0 text-sm font-semibold text-[var(--color-accent)] hover:opacity-70 transition-opacity" (click)="backToList()">
           &larr; Volver a Tickets
         </button>
         <h1 class="ui-page__title mt-2">Ticket {{ current.ticketId || current.id }}</h1>
-        <p class="mt-2 max-w-3xl text-sm text-[var(--color-muted)]">{{ current.title }}</p>
-      </div>
-
-      <div class="ui-actions">
-        <button
-          type="button"
-          class="ui-button ui-button--primary"
-          [disabled]="working() || !selectedAssigneeId() || isPrimaryTicketAssignmentLocked(current.status)"
-          (click)="assignTicket()"
-        >
-          Asignar
-        </button>
-        <button type="button" class="ui-button ui-button--primary" [disabled]="working()" (click)="updateStatus()">Guardar Cambios</button>
       </div>
     </div>
 
@@ -80,20 +67,37 @@
 
             <div>
               <p class="text-xs font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]">Department</p>
-              <p class="mt-2 text-sm font-bold text-[var(--color-text)]">{{ current.department?.name || current.departmentId }}</p>
+              <p class="mt-2 text-sm font-bold text-[var(--color-text)]">{{ current.department?.name }}</p>
             </div>
           </div>
 
-          <div class="mt-8 grid gap-8 rounded-lg bg-[var(--color-surface-low)] p-6 md:grid-cols-2">
-            <div>
-              <h3 class="text-sm font-bold text-[var(--color-accent)]">Descripción Detallada</h3>
-              <p class="mt-3 text-sm leading-6 text-[var(--color-muted)]">{{ current.description }}</p>
-            </div>
+          <div class="mt-8 flex items-start justify-between gap-4">
+            <p class="text-md font-bold text-[var(--color-accent)]">Título</p>
+            @if (canEditTitleDescription()) {
+                <button type="button" appButton="secondary" buttonSize="sm" [disabled]="working()" (click)="openEditModal()" class="flex items-center gap-1">
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                  </svg>
+                  Editar
+                </button>
+            }
+          </div>
 
+          <div class="mt-3 rounded-lg bg-[var(--color-surface-low)] p-6">
+            <p class="text-sm leading-6 text-[var(--color-muted)]">{{ current.title }}</p>
+          </div>
+
+          <p class="mt-8 text-md font-bold text-[var(--color-accent)]">Descripción Detallada</p>
+
+          <div class="mt-3 rounded-lg bg-[var(--color-surface-low)] p-6">
+            <p class="text-sm leading-6 text-[var(--color-muted)]">{{ current.description }}</p>
+          </div>
+
+          <div class="mt-8">
             <div>
               <div class="flex items-center justify-between">
-                <h3 class="text-sm font-bold text-[var(--color-accent)]">Archivos Adjuntos ({{ current.attachments?.length || 0 }})</h3>
-                <button type="button" class="ui-button ui-button--primary px-3 py-1.5 text-xs" [disabled]="uploadingFile() || working()" (click)="fileUploadInput?.click()">
+                <h3 class="text-md font-bold text-[var(--color-accent)]">Archivos Adjuntos ({{ current.attachments?.length || 0 }})</h3>
+                <button type="button" appButton="secondary" buttonSize="sm" class="px-3 py-1.5 text-xs" [disabled]="uploadingFile() || working()" (click)="fileUploadInput?.click()">
                   <input #fileUploadInput type="file" class="hidden" (change)="onFileSelected($event)" accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.txt,.csv" />
                   @if (uploadingFile()) {
                     Subiendo...
@@ -126,21 +130,24 @@
                               <!-- Visualizar Button -->
                               <button
                                 type="button"
-                                class="ui-button ui-button--text p-1.5 text-blue-600 hover:opacity-70 transition-opacity"
+                                appButton="secondary"
+                                buttonSize="sm"
+                                class="p-1.5 hover:opacity-70 transition-opacity"
                                 [disabled]="!isAttachmentViewable(asset.contentType, asset.fileName) || working()"
                                 (click)="openAttachmentPreview(asset)"
                                 [title]="!isAttachmentViewable(asset.contentType, asset.fileName) ? 'No disponible para este tipo de archivo' : 'Visualizar'"
                               >
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553 2.276A2 2 0 0121 14.03v1.94A2 2 0 0119.553 18.276L15 20.553A2 2 0 0113 18.03v-1.94A2 2 0 0114.447 14.276L19 12.553A2 2 0 0121 10.03v-1.94A2 2 0 0119.553 6.724L15 4.447A2 2 0 0113 6.47v1.94A2 2 0 0114.447 9.724L19 11.447A2 2 0 0121 13.97v1.94A2 2 0 0119.553 18.275L15 20.552"></path>
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                                 </svg>
                               </button>
-                          <button type="button" class="ui-button ui-button--text p-1.5 text-[var(--color-accent)] hover:opacity-70 transition-opacity" [disabled]="working()" (click)="downloadAttachment(asset.id, asset.fileName)" title="Descargar">
+                          <button type="button" appButton="secondary" buttonSize="sm" class="p-1.5 hover:opacity-70 transition-opacity" [disabled]="working()" (click)="downloadAttachment(asset.id, asset.fileName)" title="Descargar">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                             </svg>
                           </button>
-                          <button type="button" class="ui-button ui-button--text p-1.5 text-[var(--ui-danger-text)] hover:opacity-70 transition-opacity" [disabled]="working()" (click)="deleteAttachment(asset.id)" title="Eliminar">
+                          <button type="button" appButton="secondary" buttonSize="sm" class="p-1.5 hover:opacity-70 transition-opacity" [disabled]="working()" (click)="deleteAttachment(asset.id)" title="Eliminar">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                             </svg>
@@ -156,16 +163,25 @@
             </div>
           </div>
 
-          <div class="mt-8 rounded-lg bg-[var(--color-surface-low)] p-6">
-            <h3 class="text-xs font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]">Actividad del Timeline</h3>
+          <p class="mt-8 text-md font-bold text-[var(--color-accent)]">Actividad del Timeline</p>
+
+          <div class="mt-3 rounded-lg bg-[var(--color-surface-low)] p-6">
             @if (activities().length) {
               <ul class="mt-4 space-y-6 border-l-2 border-[color:color-mix(in_srgb,var(--color-accent)_15%,transparent)] pl-5 text-sm">
                 @for (activity of activities(); track activity.id) {
                   <li class="relative">
-                    <span class="absolute -left-[1.38rem] top-0 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--color-accent)] ring-4 ring-white text-xs">
+                    <span class="absolute -left-[1.38rem] top-0 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--color-accent)] ring-4 ring-white text-xs"
+                      [ngClass]="{ 'bg-[var(--ui-danger-text)]': activity.type === 14 }">
                       {{ getActivityIcon(activity.type) }}
                     </span>
-                    <p class="font-semibold">{{ getActivityDescription(activity) }}</p>
+                    <div class="flex items-center gap-2">
+                      <p class="font-semibold">{{ getActivityDescription(activity) }}</p>
+                      @if (activity.type === 14) {
+                        <span class="inline-flex items-center rounded-full bg-[var(--ui-danger-bg)] px-2 py-0.5 text-xs font-medium text-[var(--ui-danger-text)]">
+                          Rechazado
+                        </span>
+                      }
+                    </div>
                     <p class="text-xs text-[var(--color-muted)]">{{ activity.performedBy.name }} • {{ activity.createdAt | date: 'MMM d, y • HH:mm' }}</p>
                   </li>
                 }
@@ -176,8 +192,8 @@
           </div>
         </article>
 
-        <article class="space-y-4">
-          <h2 class="ui-card__title">Colaboración</h2>
+        <article class="ui-card ui-card--padded">
+          <h2 class="mt-4 text-md font-bold text-[var(--color-accent)]">Mensajes</h2>
 
           <div class="overflow-hidden rounded-xl bg-white shadow-[0_8px_24px_rgba(0,61,121,0.05)]">
             <div class="space-y-4 p-6">
@@ -193,7 +209,10 @@
                       <p class="mt-2 text-sm text-[var(--color-muted)]">{{ message.content }}</p>
 
                       <div class="mt-3">
-                        <button type="button" class="text-[var(--color-accent)] hover:opacity-70 transition-opacity" [disabled]="working()" (click)="openReplyModal(message.id)">
+                        <button type="button" appButton="secondary" buttonSize="sm" [disabled]="working()" (click)="openReplyModal(message.id)" class="flex items-center gap-1 whitespace-nowrap">
+                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                          </svg>
                           Responder
                         </button>
                       </div>
@@ -226,7 +245,7 @@
               ></textarea>
 
               <div class="mt-3 flex justify-end">
-                <button type="button" class="ui-button ui-button--primary" [disabled]="working() || !comment().trim()" (click)="addComment()">
+                <button type="button" appButton="primary" buttonSize="md" [disabled]="working() || !comment().trim()" (click)="addComment()">
                   Publicar Comentario
                 </button>
               </div>
@@ -237,87 +256,84 @@
 
       <aside class="col-span-12 space-y-6 xl:col-span-4">
         <article class="ui-card ui-card--padded">
-          <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Profesional Asignado</h3>
-
-          <div class="mt-4 rounded-lg bg-[var(--color-surface-low)] p-4">
-            <p class="text-sm font-bold">{{ current.assignedTo?.name || 'Unassigned' }}</p>
-            <p class="text-xs text-[var(--color-muted)]">{{ current.assignedTo?.email || 'No email available' }}</p>
-          </div>
-
-          <label class="mt-4 block text-xs font-semibold uppercase tracking-[0.1em] text-[var(--color-muted)]">
-            Reasignar ticket
-            <select
-              class="ui-input mt-2 rounded-md"
-              [disabled]="working() || !assignees().length || isPrimaryTicketAssignmentLocked(current.status)"
-              [value]="selectedAssigneeId()"
-              (change)="onAssigneeChange($any($event.target).value)"
-            >
-              <option value="">Seleccionar asignado</option>
-              @for (user of assignees(); track user.id) {
-                <option [value]="user.id">{{ user.name }}</option>
-              }
-            </select>
-          </label>
-
-          <div class="mt-4">
-            <button
-              type="button"
-              class="ui-button ui-button--primary w-full"
-              [disabled]="working() || !selectedAssigneeId() || isPrimaryTicketAssignmentLocked(current.status)"
-              (click)="assignTicket()"
-            >
-              Reasignar Ticket
-            </button>
-          </div>
-        </article>
-
-        <article class="ui-card ui-card--padded">
-          <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Flujo de Trabajo</h3>
-
-          <label class="mt-3 block text-xs font-semibold uppercase tracking-[0.1em] text-[var(--color-muted)]">
-            Estado
-            <select
-              class="ui-input mt-2 rounded-md"
-              [disabled]="working()"
-              (change)="onStatusChange($any($event.target).value)"
-            >
-              @for (status of statuses; track status.value) {
-                <option
-                  [value]="status.value"
-                  [selected]="status.value === selectedStatus()"
-                >
-                  {{ status.label }}
-                </option>
-              }
-            </select>
-          </label>
-
-          <div class="mt-4">
-            <button type="button" class="ui-button ui-button--primary w-full" [disabled]="working()" (click)="updateStatus()">Guardar</button>
-          </div>
-        </article>
-
-        <article class="ui-card ui-card--padded">
-          <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Metadatos del Ticket</h3>
           <dl class="mt-3 space-y-3 text-xs">
             <div>
-              <dt class="uppercase tracking-[0.08em] text-[var(--color-muted)]">Creado el</dt>
+              <dt class="text-sm font-bold text-[var(--color-accent)]">Asignado a</dt>
+              <dd class="mt-1">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex-1">
+                    <p class="text-sm font-semibold">{{ current.assignedTo?.name || 'Unassigned' }}</p>
+                    <p class="text-xs text-[var(--color-muted)]">{{ current.assignedTo?.email || 'No email available' }}</p>
+                  </div>
+                  <button type="button" appButton="secondary" buttonSize="sm" [disabled]="working() || !assignees().length || isPrimaryTicketAssignmentLocked(current.status)" (click)="reassignModalOpen.set(true)" class="flex items-center gap-1 whitespace-nowrap">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                    </svg>
+                    Editar
+                  </button>
+                </div>
+              </dd>
+            </div>
+            <div>
+              <dt class="text-sm font-bold text-[var(--color-accent)]">Departamento</dt>
+              <dd class="mt-1">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex-1">
+                    <p class="text-sm font-semibold">{{ current.department?.name || 'No asignado' }}</p>
+                  </div>
+                  <button type="button" appButton="secondary" buttonSize="sm" [disabled]="working()" (click)="openDepartmentChangeModal()" class="flex items-center gap-1 whitespace-nowrap">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                    </svg>
+                    Editar
+                  </button>
+                </div>
+              </dd>
+            </div>
+            <div>
+              <dt class="text-sm font-bold text-[var(--color-accent)]">Estado</dt>
+              <dd class="mt-1">
+                <div class="flex items-center justify-between gap-2">
+                  <select
+                    class="ui-input rounded-md text-sm font-semibold"
+                    style="width: 200px;"
+                    [disabled]="working()"
+                    (change)="onStatusChange($any($event.target).value)"
+                  >
+                    @for (status of statuses; track status.value) {
+                      <option
+                        [value]="status.value"
+                        [selected]="status.value === selectedStatus()"
+                      >
+                        {{ status.label }}
+                      </option>
+                    }
+                  </select>
+                  @if (selectedStatus() !== ticket()?.status) {
+                    <button type="button" appButton="secondary" buttonSize="sm" [disabled]="working()" (click)="updateTicketStatus()" class="flex items-center gap-1 whitespace-nowrap">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                      Guardar
+                    </button>
+                  }
+                </div>
+              </dd>
+            </div>
+            <div>
+              <dt class="text-sm font-bold text-[var(--color-accent)]">Creado</dt>
               <dd class="mt-1 text-sm font-semibold">{{ current.createdAt | date: 'd MMM y, HH:mm' }}</dd>
             </div>
             <div>
-              <dt class="uppercase tracking-[0.08em] text-[var(--color-muted)]">Última actualización</dt>
+              <dt class="text-sm font-bold text-[var(--color-accent)]">Última actualización</dt>
               <dd class="mt-1 text-sm font-semibold">{{ current.updatedAt | date: 'd MMM y, HH:mm' }}</dd>
-            </div>
-            <div>
-              <dt class="uppercase tracking-[0.08em] text-[var(--color-muted)]">Resolución SLA</dt>
-              <dd class="mt-1 text-sm font-semibold">{{ current.resolvedAt ? 'Resuelto' : 'En progreso' }}</dd>
             </div>
           </dl>
         </article>
 
         @if (current.parentTicket) {
           <article class="ui-card ui-card--padded">
-            <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Ticket Padre</h3>
+            <p class="text-sm font-bold text-[var(--color-accent)]">Ticket Padre</p>
             <div class="mt-3 rounded-md bg-[var(--color-surface-low)] px-3 py-2 text-xs">
               <div class="flex items-center justify-between gap-2">
                 <div class="flex-1">
@@ -353,22 +369,23 @@
 
         <article class="ui-card ui-card--padded">
           <div class="flex items-center justify-between">
-            <h3 class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-muted)]">Subtickets</h3>
-            <button type="button" class="ui-button ui-button--primary" [disabled]="working()" (click)="openSubticketModal()">Agregar</button>
+            <p class="text-sm font-bold text-[var(--color-accent)]">Subtickets</p>
+            <button type="button" appButton="secondary" buttonSize="md" [disabled]="working()" (click)="openSubticketModal()">+ Agregar</button>
           </div>
 
           @if (subtickets().length) {
             <ul class="mt-3 space-y-2">
               @for (subticket of subtickets(); track subticket.id) {
-                <li class="rounded-md bg-[var(--color-surface-low)] px-3 py-2 text-xs">
+                <li class="group relative rounded-md bg-[var(--color-surface-low)] px-3 py-2 text-xs cursor-pointer hover:opacity-80 transition-opacity border-l-4" 
+                    [ngClass]="getSubticketStatusClass(subticket.status)"
+                    (click)="openSubticketDetail(subticket.id)"
+                    title="Abrir subticket">
                   <p class="truncate font-semibold">{{ subticket.title }}</p>
-                  <p class="mt-1 text-[var(--color-muted)]">{{ getStatusLabel(subticket.status) }} • {{ getPriorityLabel(subticket.priority) }}</p>
-                  <button type="button" class="mt-2 flex items-center gap-1 font-medium text-[var(--color-accent)] hover:underline transition-opacity" (click)="openSubticketDetail(subticket.id)">
-                    Abrir
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                    </svg>
-                  </button>
+                  <p class="mt-1 text-[var(--color-muted)]">
+                    {{ subticket.ticketId }} • 
+                    <span [ngClass]="getSubticketStatusTextColorClass(subticket.status)">{{ getStatusLabel(subticket.status) }}</span>
+                  </p>
+                  <span class="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity font-medium text-[var(--color-accent)]">Abrir</span>
                 </li>
               }
             </ul>
@@ -379,6 +396,21 @@
 
       </aside>
     </div>
+
+    <!-- Mobile sticky FAB for department change -->
+    @if (ticket(); as current) {
+      <button
+        type="button"
+        class="lg:hidden fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-accent)] text-white shadow-lg transition-transform hover:scale-110"
+        [disabled]="working()"
+        (click)="openDepartmentChangeModal()"
+        title="Cambiar Departamento"
+      >
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+        </svg>
+      </button>
+    }
   }
 
   @if (replyModalOpen()) {
@@ -402,8 +434,8 @@
         ></textarea>
 
         <div class="flex justify-end gap-2">
-          <button type="button" class="ui-button ui-button--secondary" [disabled]="working()" (click)="closeReplyModal()">Cancelar</button>
-          <button type="button" class="ui-button ui-button--primary" [disabled]="working() || !replyContent().trim()" (click)="submitReply()">
+          <button type="button" appButton="secondary" buttonSize="md" [disabled]="working()" (click)="closeReplyModal()">Cancelar</button>
+          <button type="button" appButton="primary" buttonSize="md" [disabled]="working() || !replyContent().trim()" (click)="submitReply()">
             Publicar Respuesta
           </button>
         </div>
@@ -420,7 +452,7 @@
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <label class="space-y-1 text-xs uppercase tracking-[0.1em] text-[var(--color-muted)]">
+          <label class="space-y-1 text-md uppercase tracking-[0.1em] text-[var(--color-muted)]">
             Título
             <input
               type="text"
@@ -496,8 +528,88 @@
         </div>
 
         <div class="flex justify-end gap-2">
-          <button type="button" class="ui-button ui-button--secondary" [disabled]="working()" (click)="closeSubticketModal()">Cancelar</button>
-          <button type="button" class="ui-button ui-button--primary" [disabled]="working()" (click)="createSubticket()">Crear</button>
+          <button type="button" appButton="secondary" buttonSize="md" [disabled]="working()" (click)="closeSubticketModal()">Cancelar</button>
+          <button type="button" appButton="primary" buttonSize="md" [disabled]="working()" (click)="createSubticket()">Crear</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (departmentChangeModalOpen()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div class="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-[0.12em]">Cambiar Departamento</h3>
+          <button type="button" class="text-[var(--color-accent)] hover:opacity-70 transition-opacity" (click)="departmentChangeModalOpen.set(false)">Cerrar</button>
+        </div>
+
+        @if (departmentChangeError()) {
+          <div class="ui-feedback ui-feedback--error">
+            <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+            </svg>
+            <span class="text-xs">{{ departmentChangeError() }}</span>
+          </div>
+        }
+
+        <div>
+          <p class="text-sm font-bold text-[var(--color-accent)]">Departamento Actual</p>
+          <div class="mt-2 rounded-lg bg-[var(--color-surface-low)] p-4">
+            <p class="text-sm font-bold">{{ ticket()?.department?.name || 'No asignado' }}</p>
+          </div>
+        </div>
+
+        <p class="text-sm font-bold text-[var(--color-accent)]">Cambiar departamento</p>
+        <select
+          class="ui-input mt-2 rounded-md"
+          [disabled]="working()"
+          [value]="selectedDepartmentId()"
+          (change)="onDepartmentChange($any($event.target).value)"
+        >
+          <option value="">Seleccionar departamento</option>
+          @for (dept of departments(); track dept.id) {
+            <option [value]="dept.id">{{ dept.name }}</option>
+          }
+        </select>
+
+        <div class="flex justify-end gap-2">
+          <button type="button" appButton="secondary" buttonSize="md" [disabled]="working()" (click)="departmentChangeModalOpen.set(false)">Cancelar</button>
+          <button type="button" appButton="primary" buttonSize="md" [disabled]="working() || !selectedDepartmentId()" (click)="changeDepartment(); departmentChangeModalOpen.set(false)">Cambiar</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (editModalOpen()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div class="w-full max-w-2xl space-y-4 rounded-xl bg-white p-5 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-[0.12em]">Editar Título y Descripción</h3>
+          <button type="button" class="text-[var(--color-accent)] hover:opacity-70 transition-opacity" (click)="closeEditModal()">Cerrar</button>
+        </div>
+
+        <div class="space-y-3">
+          <p class="text-sm font-bold text-[var(--color-accent)]">Título</p>
+          <input
+            type="text"
+            class="ui-input mt-2 rounded-md"
+            [value]="editTitle()"
+            [disabled]="working()"
+            (input)="editTitle.set($any($event.target).value)"
+          />
+
+          <p class="text-sm font-bold text-[var(--color-accent)]">Descripción</p>
+          <textarea
+            class="ui-input mt-2 min-h-32 rounded-md"
+            [value]="editDescription()"
+            [disabled]="working()"
+            (input)="editDescription.set($any($event.target).value)"
+          ></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2">
+          <button type="button" appButton="secondary" buttonSize="md" [disabled]="working()" (click)="closeEditModal()">Cancelar</button>
+          <button type="button" appButton="primary" buttonSize="md" [disabled]="working()" (click)="saveTitleDescription()">Guardar Cambios</button>
         </div>
       </div>
     </div>
@@ -537,4 +649,42 @@
       </div>
     </div>
   }
+
+  @if (reassignModalOpen()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div class="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-[0.12em]">Reasignar Ticket</h3>
+          <button type="button" class="text-[var(--color-accent)] hover:opacity-70 transition-opacity" (click)="reassignModalOpen.set(false)">Cerrar</button>
+        </div>
+
+        <div>
+          <p class="text-sm font-bold text-[var(--color-accent)]">Asignado Actual</p>
+          <div class="mt-2 rounded-lg bg-[var(--color-surface-low)] p-4">
+            <p class="text-sm font-bold">{{ ticket()?.assignedTo?.name || 'Unassigned' }}</p>
+            <p class="text-xs text-[var(--color-muted)]">{{ ticket()?.assignedTo?.email || 'No email available' }}</p>
+          </div>
+        </div>
+
+        <p class="text-sm font-bold text-[var(--color-accent)]">Reasignar ticket</p>
+        <select
+          class="ui-input mt-2 rounded-md"
+          [disabled]="working() || !assignees().length || isPrimaryTicketAssignmentLocked(ticket()?.status)"
+          [value]="selectedAssigneeId()"
+          (change)="onAssigneeChange($any($event.target).value)"
+        >
+          <option value="">Seleccionar asignado</option>
+          @for (user of assignees(); track user.id) {
+            <option [value]="user.id">{{ user.name }}</option>
+          }
+        </select>
+
+        <div class="flex justify-end gap-2">
+          <button type="button" appButton="secondary" buttonSize="md" [disabled]="working()" (click)="reassignModalOpen.set(false)">Cancelar</button>
+          <button type="button" appButton="primary" buttonSize="md" [disabled]="working() || !selectedAssigneeId() || isPrimaryTicketAssignmentLocked(ticket()?.status)" (click)="assignTicket(); reassignModalOpen.set(false)">Guardar</button>
+        </div>
+      </div>
+    </div>
+  }
+
 </section>

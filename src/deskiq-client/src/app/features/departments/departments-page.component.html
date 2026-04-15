@@ -4,7 +4,7 @@
       <h1 class="ui-page__title">Departamentos</h1>
       <p class="ui-page__subtitle">Gestione los departamentos del sistema.</p>
     </div>
-    <button type="button" class="ui-button ui-button--primary" [routerLink]="['/departments/new']">
+    <button type="button" appButton="primary" buttonSize="md" [routerLink]="['/departments/new']">
       Crear Departamento
     </button>
   </div>
@@ -21,7 +21,9 @@
       <span class="text-sm">{{ error() }}</span>
       <button
         type="button"
-        class="ui-button ui-button--secondary ml-4 underline"
+        appButton="secondary"
+        buttonSize="md"
+        class="ml-4 underline"
         (click)="loadDepartments()"
       >
         Reintentar
@@ -32,7 +34,9 @@
       <p class="text-sm text-[var(--color-muted)]">No hay departamentos creados aún.</p>
       <button
         type="button"
-        class="ui-button ui-button--primary mt-4"
+        appButton="primary"
+        buttonSize="md"
+        class="mt-4"
         [routerLink]="['/departments/new']"
       >
         Crear primer departamento
@@ -53,7 +57,8 @@
               }
               <button
                 type="button"
-                class="ui-button ui-button--secondary"
+                appButton="secondary"
+                buttonSize="md"
                 (click)="editDepartment(dept.id)"
               >
                 Editar
@@ -61,7 +66,9 @@
               @if (dept.isActive) {
                 <button
                   type="button"
-                  class="ui-button bg-red-600 text-white hover:bg-red-700"
+                  appButton="danger"
+                  buttonSize="md"
+                  class="bg-red-600 text-white hover:bg-red-700"
                   [disabled]="deleting() === dept.id"
                   (click)="deleteDepartment(dept.id)"
                 >

@@ -47,11 +47,11 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpGet("suggest-code")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<object>> SuggestCode([FromQuery] string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new BadRequestException(ErrorCodes.DEPARTMENT_CODE_REQUIRED, "Department name is required");
+            throw new BadRequestException(ErrorCodes.DEPARTMENT_CODE_REQUIRED, "Se requiere el nombre del departamento");
 
         var existingCodes = await _context.Departments
             .Select(d => d.Code)
@@ -62,7 +62,7 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpGet("code-availability")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<object>> CheckCodeAvailability(
         [FromQuery] string code,
         [FromQuery] Guid? excludeDepartmentId = null)
@@ -79,7 +79,7 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpGet("management")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult> GetDepartmentManagementView()
     {
         var managementData = await _context.Departments
@@ -108,7 +108,7 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Administrador")]
     public async Task<ActionResult<Department>> CreateDepartment([FromBody] CreateDepartmentRequest request)
     {
         var normalizedCode = NormalizeCode(request.Code);
@@ -138,7 +138,7 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Administrador")]
     public async Task<IActionResult> UpdateDepartment(Guid id, [FromBody] UpdateDepartmentRequest request)
     {
         var department = await _context.Departments.FindAsync(id);
@@ -162,7 +162,7 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Administrador")]
     public async Task<IActionResult> DeleteDepartment(Guid id)
     {
         var department = await _context.Departments.FindAsync(id);

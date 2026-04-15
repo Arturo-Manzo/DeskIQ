@@ -33,6 +33,12 @@ export function getTicketStatusLabel(status: TicketStatus): string {
   }
 }
 
+export enum TicketViewScope {
+  MisTickets = 1,
+  Departamento = 2,
+  Todos = 3
+}
+
 export function getTicketPriorityLabel(priority: TicketPriority): string {
   switch (priority) {
     case TicketPriority.Low:
@@ -68,6 +74,10 @@ export enum ActivityType {
   TicketClosed = 10,
   TicketReopened = 11,
   CommentAdded = 12,
+  DepartmentChanged = 13,
+  DepartmentChangeAttempt = 14,
+  TitleChanged = 15,
+  DescriptionChanged = 16,
 }
 
 export interface Ticket {
@@ -217,11 +227,16 @@ export interface UnblockTicketRequest {
   resolutionNotes?: string;
 }
 
+export interface ChangeTicketDepartmentRequest {
+  newDepartmentId: string;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   departmentId: string;
+  departmentName?: string;
   role: number;
   isActive: boolean;
 }

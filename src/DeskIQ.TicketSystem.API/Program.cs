@@ -14,6 +14,24 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Debug: Check actual environment
+Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
+Console.WriteLine($"IsProduction: {builder.Environment.IsProduction()}");
+Console.WriteLine($"IsDevelopment: {builder.Environment.IsDevelopment()}");
+Console.WriteLine($"IsStaging: {builder.Environment.IsStaging()}");
+
+// JWT Configuration
+var (jwtSecret, usedJwtAppSettingsFallback) = JwtSecretResolver.Resolve(builder.Configuration);
+// Only validate in production - allow appsettings fallback in development
+if (builder.Environment.IsProduction() && usedJwtAppSettingsFallback)
+{
+    throw new InvalidOperationException(
+        $"In production, JWT secret must be set via the {JwtSecretResolver.SecretEnvironmentVariableName} environment variable, " +
+        "not in appsettings.json");
+}
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "DeskIQ.TicketSystem";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "DeskIQ.TicketSystem";
+
 string GetRequiredSetting(string key)
 {
     var value = builder.Configuration[key];
@@ -51,11 +69,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(defaultConnection));
 
 // JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("Jwt");
-var secretKey = GetRequiredSetting("Jwt:Key");
-var issuer = GetRequiredSetting("Jwt:Issuer");
-var audience = GetRequiredSetting("Jwt:Audience");
-var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -66,8 +80,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = issuer,
-            ValidAudience = audience,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
             IssuerSigningKey = key,
             ClockSkew = TimeSpan.Zero
         };
@@ -98,6 +112,8 @@ builder.Services.AddScoped<ITicketIdGenerator, TicketIdGenerator>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<ITicketActivityService, TicketActivityService>();
 builder.Services.AddScoped<TicketService>();
+builder.Services.AddScoped<PermissionService>();
+builder.Services.AddScoped<AuditService>();
 
 // Configuration
 builder.Services.Configure<FileStorageSettings>(
@@ -116,13 +132,15 @@ builder.Services.AddCors(options =>
         {
             policy.WithOrigins(allowedOrigins)
                   .AllowAnyMethod()
-                  .AllowAnyHeader();
+                  .AllowAnyHeader()
+                  .AllowCredentials();
         }
         else
         {
             policy.AllowAnyOrigin()
                   .AllowAnyMethod()
-                  .AllowAnyHeader();
+                  .AllowAnyHeader()
+                  .AllowCredentials();
         }
     });
 });
@@ -267,6 +285,34 @@ using (var scope = app.Services.CreateScope())
                 FOREIGN KEY ("ParentMessageId") REFERENCES "TicketMessages" ("Id") ON DELETE CASCADE;
             END IF;
         END $$;
+    """);
+
+    context.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS "TicketActivities" (
+            "Id" uuid NOT NULL,
+            "TicketId" uuid NOT NULL,
+            "Type" integer NOT NULL,
+            "Description" character varying(500),
+            "OldValue" character varying(200),
+            "NewValue" character varying(200),
+            "PerformedById" uuid NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_TicketActivities" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_TicketActivities_Tickets_TicketId"
+                FOREIGN KEY ("TicketId") REFERENCES "Tickets" ("Id") ON DELETE CASCADE,
+            CONSTRAINT "FK_TicketActivities_Users_PerformedById"
+                FOREIGN KEY ("PerformedById") REFERENCES "Users" ("Id") ON DELETE RESTRICT
+        );
+    """);
+
+    context.Database.ExecuteSqlRaw("""
+        CREATE INDEX IF NOT EXISTS "IX_TicketActivities_TicketId"
+        ON "TicketActivities" ("TicketId");
+    """);
+
+    context.Database.ExecuteSqlRaw("""
+        CREATE INDEX IF NOT EXISTS "IX_TicketActivities_CreatedAt"
+        ON "TicketActivities" ("CreatedAt");
     """);
 }
 

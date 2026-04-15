@@ -12,8 +12,13 @@ public class User
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
+    // SSO fields for identity provider integration
+    public string? ExtId { get; set; } // External ID from SSO provider
+    public bool DepartmentPendingAssign { get; set; } // Flag for SSO users without department assignment
+
     // Navigation properties
     public Department Department { get; set; } = null!;
+    public ICollection<UserDepartment> UserDepartments { get; set; } = new List<UserDepartment>();
     public ICollection<Ticket> CreatedTickets { get; set; } = new List<Ticket>();
     public ICollection<Ticket> AssignedTickets { get; set; } = new List<Ticket>();
     public ICollection<TicketMessage> Messages { get; set; } = new List<TicketMessage>();
@@ -21,7 +26,11 @@ public class User
 
 public enum UserRole
 {
-    Agent = 1,
-    Supervisor = 2,
-    Admin = 3
+    Cliente = 1,
+    ClienteSupervisor = 2,
+    Operador = 3,
+    OperadorSupervisor = 4,
+    SupervisorGeneral = 5,
+    Auditor = 6,
+    Administrador = 7
 }

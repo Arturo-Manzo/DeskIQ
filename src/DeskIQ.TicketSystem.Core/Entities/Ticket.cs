@@ -56,3 +56,10 @@ public enum TicketSource
     WhatsApp = 3,
     API = 4
 }
+
+public enum TicketViewScope
+{
+    MisTickets = 1,
+    Departamento = 2,
+    Todos = 3
+}

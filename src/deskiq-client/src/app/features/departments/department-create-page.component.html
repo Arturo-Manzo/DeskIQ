@@ -8,7 +8,7 @@
         <p class="ui-page__subtitle">Complete el formulario para editar el departamento.</p>
       }
     </div>
-    <button type="button" class="ui-button ui-button--secondary" (click)="cancel()">
+    <button type="button" appButton="secondary" buttonSize="md" (click)="cancel()">
       Cancelar
     </button>
   </div>
@@ -77,7 +77,8 @@
               @if (!isEditMode()) {
                 <button
                   type="button"
-                  class="ui-button ui-button--secondary"
+                  appButton="secondary"
+                  buttonSize="md"
                   (click)="suggestCode()"
                 >
                   Sugerir
@@ -167,8 +168,8 @@
 
           <!-- Submit Button -->
           <div class="flex justify-end gap-3">
-            <button type="button" class="ui-button ui-button--secondary" (click)="cancel()">Cancelar</button>
-            <button type="submit" class="ui-button ui-button--primary" [disabled]="submitting() || form.invalid">
+            <button type="button" appButton="secondary" buttonSize="md" (click)="cancel()">Cancelar</button>
+            <button type="submit" appButton="primary" buttonSize="md" [disabled]="submitting() || form.invalid">
               @if (submitting()) {
                 <span class="flex items-center gap-2">
                   <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24">

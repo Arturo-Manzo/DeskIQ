@@ -30,10 +30,10 @@ public class AuthController : ControllerBase
             .FirstOrDefaultAsync(u => u.Email == request.Email);
 
         if (user == null || !user.IsActive)
-            throw new UnauthorizedException(ErrorCodes.INVALID_CREDENTIALS, "Invalid credentials");
+            throw new UnauthorizedException(ErrorCodes.INVALID_CREDENTIALS, "Credenciales inválidas");
 
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            throw new UnauthorizedException(ErrorCodes.INVALID_CREDENTIALS, "Invalid credentials");
+            throw new UnauthorizedException(ErrorCodes.INVALID_CREDENTIALS, "Credenciales inválidas");
 
         var token = _jwtService.GenerateToken(user);
 
@@ -70,12 +70,12 @@ public class AuthController : ControllerBase
             .AnyAsync(u => u.Email == request.Email);
 
         if (existingUser)
-            throw new BadRequestException(ErrorCodes.EMAIL_ALREADY_EXISTS, "Email already exists");
+            throw new BadRequestException(ErrorCodes.EMAIL_ALREADY_EXISTS, "El correo electrónico ya existe");
 
         // Verify department exists
         var department = await _context.Departments.FindAsync(request.DepartmentId);
         if (department == null)
-            throw new BadRequestException(ErrorCodes.INVALID_DEPARTMENT, "Invalid department");
+            throw new BadRequestException(ErrorCodes.INVALID_DEPARTMENT, "Departamento inválido");
 
         var user = new User
         {
@@ -84,7 +84,7 @@ public class AuthController : ControllerBase
             Email = request.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             DepartmentId = request.DepartmentId,
-            Role = UserRole.Agent, // Default role for new users
+            Role = UserRole.Cliente, // Default role for new users
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -130,7 +130,7 @@ public class AuthController : ControllerBase
     {
         var principal = _jwtService.ValidateToken(request.Token);
         if (principal == null)
-            throw new UnauthorizedException(ErrorCodes.INVALID_TOKEN, "Invalid token");
+            throw new UnauthorizedException(ErrorCodes.INVALID_TOKEN, "Token inválido");
 
         var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var email = principal.FindFirst(ClaimTypes.Email)?.Value;

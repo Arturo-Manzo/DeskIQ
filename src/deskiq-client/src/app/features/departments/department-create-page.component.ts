@@ -6,11 +6,12 @@ import { AuthService } from '../../core/auth/auth.service';
 import { DepartmentService, CreateDepartmentRequest, UpdateDepartmentRequest } from '../../core/services/department.service';
 import { Department } from '../../core/models/ticket.models';
 import { UserRole } from '../../core/models/auth.models';
+import { ButtonDirective } from 'ui-design-system';
 
 @Component({
   selector: 'app-department-create-page',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ButtonDirective],
   templateUrl: './department-create-page.component.html',
 })
 export class DepartmentCreatePageComponent {
@@ -70,7 +71,7 @@ export class DepartmentCreatePageComponent {
 
   checkAdminPrivileges(): void {
     const user = this.authService.user();
-    if (!user || user.role !== UserRole.Admin) {
+    if (!user || user.role !== UserRole.Administrador) {
       this.router.navigate(['/dashboard']);
     }
   }

@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/auth/auth.guard';
+import { authGuard, adminGuard, metricsGuard, departmentsGuard, ticketCreateGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
 	{
@@ -20,6 +20,7 @@ export const routes: Routes = [
 			},
 			{
 				path: 'dashboard',
+				canActivate: [metricsGuard],
 				loadComponent: () =>
 					import('./features/dashboard/dashboard-page.component').then(
 						(m) => m.DashboardPageComponent,
@@ -32,6 +33,7 @@ export const routes: Routes = [
 			},
 			{
 				path: 'tickets/new',
+				canActivate: [ticketCreateGuard],
 				loadComponent: () =>
 					import('./features/tickets/ticket-create-page.component').then((m) => m.TicketCreatePageComponent),
 			},
@@ -42,18 +44,45 @@ export const routes: Routes = [
 			},
 			{
 				path: 'departments',
+				canActivate: [departmentsGuard],
 				loadComponent: () =>
 					import('./features/departments/departments-page.component').then((m) => m.DepartmentsPageComponent),
 			},
 			{
 				path: 'departments/new',
+				canActivate: [departmentsGuard],
 				loadComponent: () =>
 					import('./features/departments/department-create-page.component').then((m) => m.DepartmentCreatePageComponent),
 			},
 			{
 				path: 'departments/:id/edit',
+				canActivate: [departmentsGuard],
 				loadComponent: () =>
 					import('./features/departments/department-create-page.component').then((m) => m.DepartmentCreatePageComponent),
+			},
+			{
+				path: 'users',
+				canActivate: [adminGuard],
+				loadComponent: () =>
+					import('./features/users/users-page.component').then((m) => m.UsersPageComponent),
+			},
+			{
+				path: 'users/new',
+				canActivate: [adminGuard],
+				loadComponent: () =>
+					import('./features/users/user-create-page.component').then((m) => m.UserCreatePageComponent),
+			},
+			{
+				path: 'users/:id',
+				canActivate: [adminGuard],
+				loadComponent: () =>
+					import('./features/users/user-detail-page.component').then((m) => m.UserDetailPageComponent),
+			},
+			{
+				path: 'users/:id/edit',
+				canActivate: [adminGuard],
+				loadComponent: () =>
+					import('./features/users/user-edit-page.component').then((m) => m.UserEditPageComponent),
 			},
 		],
 	},

@@ -7,10 +7,12 @@ namespace DeskIQ.TicketSystem.Application.Services;
 public class TicketService
 {
     private readonly AppDbContext _context;
+    private readonly PermissionService _permissionService;
 
-    public TicketService(AppDbContext context)
+    public TicketService(AppDbContext context, PermissionService permissionService)
     {
         _context = context;
+        _permissionService = permissionService;
     }
 
     public async Task<Department?> GetDepartmentAsync(Guid departmentId)
@@ -48,10 +50,7 @@ public class TicketService
         if (department == null)
             return false;
 
-        if (currentUser.Role != UserRole.Admin && departmentId != currentUser.DepartmentId)
-            return false;
-
-        return true;
+        return _permissionService.CanCreateTicket(currentUser, departmentId);
     }
 
     public async Task<bool> ValidateSubticketCreationAsync(Guid parentTicketId, bool isBlocked, string? blockedReason)
@@ -67,12 +66,19 @@ public class TicketService
     }
 
     public async Task<(bool IsValid, string? ErrorMessage)> ValidateTicketUpdateAsync(
-        Ticket ticket, 
+        Ticket ticket,
         UpdateTicketValidationRequest request)
     {
         if (request.IsBlocked == true && string.IsNullOrWhiteSpace(request.BlockedReason) && string.IsNullOrWhiteSpace(ticket.BlockedReason))
         {
             return (false, "Blocked reason is required when ticket is blocked");
+        }
+
+        // Validate title/description editing for resolved/closed tickets
+        var isEditingTitleOrDescription = !string.IsNullOrWhiteSpace(request.Title) || !string.IsNullOrWhiteSpace(request.Description);
+        if (isEditingTitleOrDescription && (ticket.Status == TicketStatus.Resolved || ticket.Status == TicketStatus.Closed))
+        {
+            return (false, "No se puede editar título/descripción de un ticket resuelto o cerrado.");
         }
 
         var wantsToCloseParent = ticket.ParentTicketId == null &&
@@ -135,50 +141,24 @@ public class TicketService
         return true;
     }
 
-    public static bool CanViewTicket(User user, Ticket ticket)
+    public bool CanViewTicket(User user, Ticket ticket)
     {
-        if (user.Role == UserRole.Admin)
-            return true;
-
-        return user.DepartmentId == ticket.DepartmentId;
+        return _permissionService.CanViewTicket(user, ticket);
     }
 
-    public static bool CanCommentTicket(User user, Ticket ticket)
+    public bool CanCommentTicket(User user, Ticket ticket)
     {
-        if (!CanViewTicket(user, ticket))
-            return false;
-
-        if (user.Role == UserRole.Supervisor)
-            return true;
-
-        if (user.Role == UserRole.Admin)
-            return true;
-
-        return ticket.CreatedById == user.Id || ticket.AssignedToId == user.Id;
+        return _permissionService.CanCommentTicket(user, ticket);
     }
 
-    public static bool CanUpdateTicket(User user, Ticket ticket, UpdateTicketValidationRequest request)
+    public bool CanUpdateTicket(User user, Ticket ticket, UpdateTicketValidationRequest request)
     {
-        if (!CanViewTicket(user, ticket))
-            return false;
+        return _permissionService.CanEditTicket(user, ticket);
+    }
 
-        if (user.Role == UserRole.Admin || user.Role == UserRole.Supervisor)
-            return true;
-
-        var isCreator = ticket.CreatedById == user.Id;
-        var isAssigned = ticket.AssignedToId == user.Id;
-        var takingOwnership =
-            ticket.AssignedToId == null &&
-            request.AssignedToId.HasValue &&
-            request.AssignedToId.Value == user.Id;
-
-        var canReassignPrimaryOpenTicket =
-            ticket.ParentTicketId == null &&
-            request.AssignedToId.HasValue &&
-            ticket.Status != TicketStatus.Resolved &&
-            ticket.Status != TicketStatus.Closed;
-
-        return isCreator || isAssigned || takingOwnership || canReassignPrimaryOpenTicket;
+    public bool CanAssignTicket(User user, Ticket ticket, Guid? newAssigneeId)
+    {
+        return _permissionService.CanAssignTicket(user, ticket, newAssigneeId);
     }
 
     public async Task<List<Ticket>> GetOpenSubticketsAsync(Guid parentTicketId)
@@ -188,6 +168,40 @@ public class TicketService
                         t.Status != TicketStatus.Resolved &&
                         t.Status != TicketStatus.Closed)
             .ToListAsync();
+    }
+
+    public async Task<(bool IsValid, string? ErrorMessage)> ValidateDepartmentChangeAsync(
+        Ticket ticket,
+        Guid newDepartmentId)
+    {
+        var newDepartment = await _context.Departments.FindAsync(newDepartmentId);
+        if (newDepartment == null)
+            return (false, "El departamento seleccionado no existe.");
+
+        if (ticket.DepartmentId == newDepartmentId)
+            return (false, "El ticket ya pertenece al departamento seleccionado.");
+
+        // Check if ticket has assigned user
+        if (ticket.AssignedToId.HasValue)
+        {
+            var assignedUser = await _context.Users
+                .Include(u => u.UserDepartments)
+                .FirstOrDefaultAsync(u => u.Id == ticket.AssignedToId.Value);
+
+            if (assignedUser != null)
+            {
+                // Check if user belongs to new department (primary or multi-department)
+                bool belongsToNewDepartment = assignedUser.DepartmentId == newDepartmentId ||
+                    assignedUser.UserDepartments.Any(ud => ud.DepartmentId == newDepartmentId);
+
+                if (!belongsToNewDepartment)
+                {
+                    return (false, "El usuario asignado al ticket no pertenece al departamento destino. Para cambiar el departamento, primero desasigna el ticket o asigna a un usuario que pertenezca al departamento seleccionado.");
+                }
+            }
+        }
+
+        return (true, null);
     }
 }
 

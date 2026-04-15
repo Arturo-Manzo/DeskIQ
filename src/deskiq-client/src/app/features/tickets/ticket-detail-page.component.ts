@@ -3,14 +3,18 @@ import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subticket, Ticket, TicketPriority, TicketStatus, User, getTicketPriorityLabel, getTicketStatusLabel } from '../../core/models/ticket.models';
+import { Subticket, Ticket, TicketPriority, TicketStatus, User, Department, getTicketPriorityLabel, getTicketStatusLabel } from '../../core/models/ticket.models';
 import { TicketService } from '../../core/services/ticket.service';
 import { UserService } from '../../core/services/user.service';
+import { DepartmentService } from '../../core/services/department.service';
+import { AuthService } from '../../core/auth/auth.service';
+import { UserRole } from '../../core/models/auth.models';
+import { ButtonDirective } from 'ui-design-system';
 
 @Component({
   selector: 'app-ticket-detail-page',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ButtonDirective],
   templateUrl: './ticket-detail-page.component.html',
 })
 export class TicketDetailPageComponent {
@@ -19,6 +23,8 @@ export class TicketDetailPageComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly ticketService = inject(TicketService);
   private readonly userService = inject(UserService);
+  private readonly departmentService = inject(DepartmentService);
+  private readonly authService = inject(AuthService);
 
   readonly loading = signal(true);
   // State for attachment visualizer modal
@@ -53,6 +59,14 @@ export class TicketDetailPageComponent {
   readonly uploadingFile = signal(false);
   readonly fileUploadError = signal<string | null>(null);
   readonly activities = signal<any[]>([]);
+  readonly departments = signal<Department[]>([]);
+  readonly selectedDepartmentId = signal<string>('');
+  readonly departmentChangeModalOpen = signal(false);
+  readonly departmentChangeError = signal<string | null>(null);
+  readonly editModalOpen = signal(false);
+  readonly editTitle = signal('');
+  readonly editDescription = signal('');
+  readonly reassignModalOpen = signal(false);
 
   readonly statuses: Array<{ value: TicketStatus; label: string }> = [
     { value: TicketStatus.Open, label: getTicketStatusLabel(TicketStatus.Open) },
@@ -114,6 +128,31 @@ export class TicketDetailPageComponent {
         this.loading.set(false);
       },
     });
+  }
+
+  canEditTitleDescription(): boolean {
+    const currentTicket = this.ticket();
+    const currentUser = this.authService.user();
+
+    if (!currentTicket || !currentUser) {
+      return false;
+    }
+
+    // Cannot edit if ticket is resolved or closed
+    if (currentTicket.status === TicketStatus.Resolved || currentTicket.status === TicketStatus.Closed) {
+      return false;
+    }
+
+    // Creator can always edit their own ticket
+    if (currentUser.id === currentTicket.createdById) {
+      return true;
+    }
+
+    // OperadorSupervisor, ClienteSupervisor, SupervisorGeneral, Administrador can edit
+    return currentUser.role === UserRole.OperadorSupervisor ||
+           currentUser.role === UserRole.ClienteSupervisor ||
+           currentUser.role === UserRole.SupervisorGeneral ||
+           currentUser.role === UserRole.Administrador;
   }
 
   backToList(): void {
@@ -261,14 +300,14 @@ export class TicketDetailPageComponent {
           this.retryLoad();
         },
         error: (response: HttpErrorResponse) => {
-          const message = typeof response.error === 'string' ? response.error : null;
+          const message = response.error?.message || (typeof response.error === 'string' ? response.error : null);
           this.actionError.set(message || 'No se pudo asignar el ticket.');
           this.working.set(false);
         },
       });
   }
 
-  updateStatus(): void {
+  updateTicketStatus(): void {
     const currentTicket = this.ticket();
     const nextStatus = this.selectedStatus();
 
@@ -308,7 +347,7 @@ export class TicketDetailPageComponent {
           this.retryLoad();
         },
         error: (response: HttpErrorResponse) => {
-          const message = typeof response.error === 'string' ? response.error : null;
+          const message = response.error?.message || (typeof response.error === 'string' ? response.error : null);
           this.actionError.set(message || 'No se pudo actualizar el estado.');
           this.working.set(false);
         },
@@ -425,7 +464,8 @@ export class TicketDetailPageComponent {
           this.retryLoad();
         },
         error: (response: HttpErrorResponse) => {
-          this.actionError.set(response.error || 'No se pudo crear el subticket.');
+          const message = response.error?.message || (typeof response.error === 'string' ? response.error : null);
+          this.actionError.set(message || 'No se pudo crear el subticket.');
           this.working.set(false);
         },
       });
@@ -457,7 +497,7 @@ export class TicketDetailPageComponent {
   }
 
   private loadAssignees(departmentId: string): void {
-    this.userService.getUsers(departmentId, true).subscribe({
+    this.userService.getAssignees(departmentId).subscribe({
       next: (users) => {
         this.assignees.set(users);
 
@@ -496,7 +536,7 @@ export class TicketDetailPageComponent {
   getActivityIcon(type: number): string {
     switch (type) {
       case 1: return '🎫'; // TicketCreated
-      case 2: return '🔄'; // StatusChanged
+      case 2: return '📊'; // StatusChanged
       case 3: return '⚡'; // PriorityChanged
       case 4: return '👤'; // Assigned
       case 5: return '🔄'; // Reassigned
@@ -507,6 +547,10 @@ export class TicketDetailPageComponent {
       case 10: return '✅'; // TicketClosed
       case 11: return '🔄'; // TicketReopened
       case 12: return '💬'; // CommentAdded
+      case 13: return '🏢'; // DepartmentChangeAttempt
+      case 14: return '⚠️'; // DepartmentChangeSuccess
+      case 15: return '✏️'; // TitleChanged
+      case 16: return '📝'; // DescriptionChanged
       default: return '📌';
     }
   }
@@ -542,6 +586,22 @@ export class TicketDetailPageComponent {
 
   getPriorityLabel(priority: number): string {
     return getTicketPriorityLabel(priority);
+  }
+
+  getSubticketStatusClass(status: number): { [key: string]: boolean } {
+    if (status === TicketStatus.Resolved || status === TicketStatus.Closed) {
+      return { 'border-[var(--ui-success-text)]': true };
+    } else {
+      return { 'border-[var(--ui-danger-text)]': true };
+    }
+  }
+
+  getSubticketStatusTextColorClass(status: number): { [key: string]: boolean } {
+    if (status === TicketStatus.Resolved || status === TicketStatus.Closed) {
+      return { 'text-[var(--ui-success-text)]': true };
+    } else {
+      return { 'text-[var(--ui-danger-text)]': true };
+    }
   }
 
   onFileSelected(event: Event): void {
@@ -696,5 +756,116 @@ export class TicketDetailPageComponent {
 
   private isGuid(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  openDepartmentChangeModal(): void {
+    const currentTicket = this.ticket();
+    if (!currentTicket) return;
+
+    this.selectedDepartmentId.set('');
+    this.departmentChangeModalOpen.set(true);
+    this.departmentChangeError.set(null);
+
+    this.departmentService.getDepartments().subscribe({
+      next: (departments) => this.departments.set(departments),
+      error: () => this.departments.set([])
+    });
+  }
+
+  closeDepartmentChangeModal(): void {
+    this.departmentChangeModalOpen.set(false);
+    this.selectedDepartmentId.set('');
+    this.departmentChangeError.set(null);
+  }
+
+  onDepartmentChange(value: string): void {
+    this.selectedDepartmentId.set(value);
+  }
+
+  changeDepartment(): void {
+    const currentTicket = this.ticket();
+    const newDepartmentId = this.selectedDepartmentId();
+
+    if (!currentTicket || !newDepartmentId) {
+      return;
+    }
+
+    // All validation is handled by backend
+    this.working.set(true);
+    this.departmentChangeError.set(null);
+    this.actionSuccess.set(null);
+
+    this.ticketService.changeTicketDepartment(currentTicket.id, { newDepartmentId }).subscribe({
+      next: () => {
+        this.actionSuccess.set('Departamento cambiado correctamente.');
+        this.working.set(false);
+        this.closeDepartmentChangeModal();
+        this.retryLoad();
+      },
+      error: (response: HttpErrorResponse) => {
+        const message = response.error?.message || (typeof response.error === 'string' ? response.error : null);
+        this.departmentChangeError.set(message || 'No se pudo cambiar el departamento.');
+        this.working.set(false);
+      },
+    });
+  }
+
+  openEditModal(): void {
+    const currentTicket = this.ticket();
+    if (!currentTicket) return;
+
+    this.editTitle.set(currentTicket.title);
+    this.editDescription.set(currentTicket.description);
+    this.editModalOpen.set(true);
+    this.actionError.set(null);
+    this.actionSuccess.set(null);
+  }
+
+  closeEditModal(): void {
+    this.editModalOpen.set(false);
+    this.editTitle.set('');
+    this.editDescription.set('');
+    this.actionError.set(null);
+  }
+
+  saveTitleDescription(): void {
+    const currentTicket = this.ticket();
+    const title = this.editTitle().trim();
+    const description = this.editDescription().trim();
+
+    if (!currentTicket || !title || !description) {
+      this.actionError.set('El título y la descripción son requeridos.');
+      return;
+    }
+
+    if (title === currentTicket.title && description === currentTicket.description) {
+      this.actionError.set('No hay cambios para guardar.');
+      return;
+    }
+
+    if (!window.confirm('¿Estás seguro de que deseas guardar los cambios en el título y descripción?')) {
+      return;
+    }
+
+    this.working.set(true);
+    this.actionError.set(null);
+    this.actionSuccess.set(null);
+
+    this.ticketService.updateTicket(currentTicket.id, {
+      title,
+      description,
+    }).subscribe({
+      next: () => {
+        this.actionSuccess.set('Título y descripción actualizados correctamente.');
+        this.working.set(false);
+        this.closeEditModal();
+        this.retryLoad();
+      },
+      error: (response: HttpErrorResponse) => {
+        const message = response.error?.message || (typeof response.error === 'string' ? response.error : null);
+        this.actionError.set(message || 'No se pudo actualizar el título y descripción.');
+        this.working.set(false);
+      },
+    });
   }
 }

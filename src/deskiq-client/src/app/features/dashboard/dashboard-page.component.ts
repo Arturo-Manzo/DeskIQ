@@ -4,22 +4,26 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { TicketService } from '../../core/services/ticket.service';
 import { TicketRealtimeService } from '../../core/services/ticket-realtime.service';
+import { PermissionService } from '../../core/services/permission.service';
 import { Ticket, TicketPriority, TicketStatus, getTicketPriorityLabel, getTicketStatusLabel } from '../../core/models/ticket.models';
+import { ButtonDirective } from 'ui-design-system';
 
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ButtonDirective],
   templateUrl: './dashboard-page.component.html',
 })
 export class DashboardPageComponent implements OnInit, OnDestroy {
   private readonly ticketsApi = inject(TicketService);
   private readonly realtime = inject(TicketRealtimeService);
   private readonly auth = inject(AuthService);
+  private readonly permissions = inject(PermissionService);
 
   readonly isLoading = signal(true);
   readonly error = signal<string | null>(null);
   readonly tickets = signal<Ticket[]>([]);
+  readonly showMetrics = computed(() => this.permissions.canViewDashboard());
 
   readonly openCount = computed(
     () =>

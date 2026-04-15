@@ -5,11 +5,12 @@ import { AuthService } from '../../core/auth/auth.service';
 import { DepartmentService } from '../../core/services/department.service';
 import { Department } from '../../core/models/ticket.models';
 import { UserRole } from '../../core/models/auth.models';
+import { ButtonDirective } from 'ui-design-system';
 
 @Component({
   selector: 'app-departments-page',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, ButtonDirective],
   templateUrl: './departments-page.component.html',
 })
 export class DepartmentsPageComponent {
@@ -29,7 +30,7 @@ export class DepartmentsPageComponent {
 
   checkAdminPrivileges(): void {
     const user = this.authService.user();
-    if (!user || user.role !== UserRole.Admin) {
+    if (!user || user.role !== UserRole.Administrador) {
       this.router.navigate(['/dashboard']);
     }
   }

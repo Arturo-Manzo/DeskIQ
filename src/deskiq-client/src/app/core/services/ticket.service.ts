@@ -5,6 +5,7 @@ import { API_BASE_URL } from '../config/api.config';
 import {
   AddTicketMessageRequest,
   BlockTicketRequest,
+  ChangeTicketDepartmentRequest,
   CreateSubticketRequest,
   CreateTicketRequest,
   Subticket,
@@ -12,6 +13,7 @@ import {
   UnblockTicketRequest,
   UpdateTicketRequest,
   TicketActivity,
+  TicketViewScope,
 } from '../models/ticket.models';
 
 @Injectable({ providedIn: 'root' })
@@ -137,10 +139,18 @@ export class TicketService {
     } as Ticket;
   }
 
-  getTickets(page = 1, pageSize = 25): Observable<Ticket[]> {
-    const params = new HttpParams()
+  getTickets(
+    page = 1,
+    pageSize = 25,
+    scope?: TicketViewScope
+  ): Observable<Ticket[]> {
+    let params = new HttpParams()
       .set('page', String(page))
       .set('pageSize', String(pageSize));
+
+    if (scope !== undefined) {
+      params = params.set('scope', String(scope));
+    }
 
     return this.http.get<any>(`${API_BASE_URL}/api/tickets`, { params }).pipe(
       map(response => {
@@ -159,6 +169,12 @@ export class TicketService {
 
   createTicket(request: CreateTicketRequest): Observable<Ticket> {
     return this.http.post<any>(`${API_BASE_URL}/api/tickets`, request).pipe(
+      map((ticket) => this.mapTicket(ticket))
+    );
+  }
+
+  createTicketWithAttachments(formData: FormData): Observable<Ticket> {
+    return this.http.post<any>(`${API_BASE_URL}/api/tickets/with-attachments`, formData).pipe(
       map((ticket) => this.mapTicket(ticket))
     );
   }
@@ -234,5 +250,9 @@ export class TicketService {
         }));
       })
     );
+  }
+
+  changeTicketDepartment(id: string, request: ChangeTicketDepartmentRequest): Observable<void> {
+    return this.http.put<void>(`${API_BASE_URL}/api/tickets/${id}/department`, request);
   }
 }

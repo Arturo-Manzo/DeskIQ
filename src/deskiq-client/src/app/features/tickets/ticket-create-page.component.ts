@@ -8,11 +8,18 @@ import { TicketService } from '../../core/services/ticket.service';
 import { UserService } from '../../core/services/user.service';
 import { CreateTicketRequest, Department, TicketPriority, TicketSource, User } from '../../core/models/ticket.models';
 import { UserRole } from '../../core/models/auth.models';
+import { ButtonDirective } from 'ui-design-system';
+
+interface FileWithProgress {
+  file: File;
+  progress: number;
+  error: string | null;
+}
 
 @Component({
   selector: 'app-ticket-create-page',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ButtonDirective],
   templateUrl: './ticket-create-page.component.html',
 })
 export class TicketCreatePageComponent {
@@ -28,6 +35,14 @@ export class TicketCreatePageComponent {
   readonly error = signal<string | null>(null);
   readonly departments = signal<Department[]>([]);
   readonly users = signal<User[]>([]);
+
+  // File upload configuration
+  readonly maxFileSize = 10 * 1024 * 1024; // 10MB
+  readonly maxFiles = 10;
+  readonly allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.doc', '.docx', '.txt', '.csv'];
+  readonly files = signal<FileWithProgress[]>([]);
+  readonly uploadProgress = signal(0);
+  readonly dragOver = signal(false);
 
   readonly form: FormGroup = this.fb.group({
     title: ['', [Validators.required, Validators.minLength(3)]],
@@ -50,7 +65,9 @@ export class TicketCreatePageComponent {
   hasAssignPrivileges(): boolean {
     const user = this.authService.user();
     if (!user) return false;
-    return user.role === UserRole.Admin || user.role === UserRole.Supervisor;
+    return user.role === UserRole.Administrador || 
+           user.role === UserRole.OperadorSupervisor || 
+           user.role === UserRole.SupervisorGeneral;
   }
 
   loadDepartments(): void {
@@ -103,6 +120,83 @@ export class TicketCreatePageComponent {
     }
   }
 
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.dragOver.set(true);
+  }
+
+  onDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    this.dragOver.set(false);
+  }
+
+  onDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.dragOver.set(false);
+    
+    const droppedFiles = event.dataTransfer?.files;
+    if (droppedFiles) {
+      this.handleFiles(Array.from(droppedFiles));
+    }
+  }
+
+  onFileSelect(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const selectedFiles = input.files;
+    if (selectedFiles) {
+      this.handleFiles(Array.from(selectedFiles));
+    }
+    input.value = ''; // Reset input
+  }
+
+  handleFiles(newFiles: File[]): void {
+    const currentFiles = this.files();
+    
+    if (currentFiles.length + newFiles.length > this.maxFiles) {
+      this.error.set(`Máximo ${this.maxFiles} archivos permitidos por ticket`);
+      return;
+    }
+
+    for (const file of newFiles) {
+      // Validate file size
+      if (file.size > this.maxFileSize) {
+        this.error.set(`El archivo "${file.name}" excede el tamaño máximo de ${this.maxFileSize / (1024 * 1024)}MB`);
+        continue;
+      }
+
+      // Validate file extension
+      const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (!this.allowedExtensions.includes(extension)) {
+        this.error.set(`El archivo "${file.name}" tiene una extensión no permitida`);
+        continue;
+      }
+
+      // Check for duplicates
+      const isDuplicate = currentFiles.some(f => f.file.name === file.name && f.file.size === file.size);
+      if (isDuplicate) {
+        this.error.set(`El archivo "${file.name}" ya ha sido agregado`);
+        continue;
+      }
+
+      this.files.update(files => [...files, { file, progress: 0, error: null }]);
+    }
+
+    // Clear error after 3 seconds if it's a file validation error
+    setTimeout(() => this.error.set(null), 3000);
+  }
+
+  removeFile(index: number): void {
+    this.files.update(files => files.filter((_, i) => i !== index));
+  }
+
+  formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
   onSubmit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -120,27 +214,56 @@ export class TicketCreatePageComponent {
     }
 
     const formValue = this.form.value;
+    const currentFiles = this.files();
 
-    const request: CreateTicketRequest = {
-      title: formValue.title,
-      description: formValue.description,
-      priority: formValue.priority,
-      createdById: user.id,
-      departmentId: formValue.departmentId,
-      source: TicketSource.Web,
-      assignedToId: formValue.assignedToId || undefined,
-    };
+    // Use multipart/form-data if files are present
+    if (currentFiles.length > 0) {
+      const formData = new FormData();
+      formData.append('Title', formValue.title);
+      formData.append('Description', formValue.description);
+      formData.append('Priority', formValue.priority.toString());
+      formData.append('DepartmentId', formValue.departmentId);
+      formData.append('Source', TicketSource.Web.toString());
+      if (formValue.assignedToId) {
+        formData.append('AssignedToId', formValue.assignedToId);
+      }
 
-    this.ticketService.createTicket(request).subscribe({
-      next: () => {
-        this.submitting.set(false);
-        this.router.navigate(['/tickets']);
-      },
-      error: () => {
-        this.error.set('No se pudo crear el ticket. Intente nuevamente.');
-        this.submitting.set(false);
-      },
-    });
+      currentFiles.forEach(f => {
+        formData.append('Attachments', f.file);
+      });
+
+      this.ticketService.createTicketWithAttachments(formData).subscribe({
+        next: () => {
+          this.submitting.set(false);
+          this.router.navigate(['/tickets']);
+        },
+        error: () => {
+          this.error.set('No se pudo crear el ticket. Intente nuevamente.');
+          this.submitting.set(false);
+        },
+      });
+    } else {
+      const request: CreateTicketRequest = {
+        title: formValue.title,
+        description: formValue.description,
+        priority: formValue.priority,
+        createdById: user.id,
+        departmentId: formValue.departmentId,
+        source: TicketSource.Web,
+        assignedToId: formValue.assignedToId || undefined,
+      };
+
+      this.ticketService.createTicket(request).subscribe({
+        next: () => {
+          this.submitting.set(false);
+          this.router.navigate(['/tickets']);
+        },
+        error: () => {
+          this.error.set('No se pudo crear el ticket. Intente nuevamente.');
+          this.submitting.set(false);
+        },
+      });
+    }
   }
 
   cancel(): void {

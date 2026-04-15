@@ -2,12 +2,13 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
-import { ThemeMode, ThemeService } from '../../core/services/theme.service';
+import { ThemeMode, ThemeService } from 'ui-design-system';
+import { ButtonDirective } from 'ui-design-system';
 
 @Component({
   selector: 'app-login-page',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ButtonDirective],
   templateUrl: './login-page.component.html',
 })
 export class LoginPageComponent {

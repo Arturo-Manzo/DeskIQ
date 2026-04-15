@@ -19,6 +19,8 @@ public class AppDbContext : DbContext
     public DbSet<TicketActivity> TicketActivities { get; set; }
     public DbSet<EmailAccount> EmailAccounts { get; set; }
     public DbSet<WhatsAppConfig> WhatsAppConfigs { get; set; }
+    public DbSet<UserDepartment> UserDepartments { get; set; }
+    public DbSet<AuditLog> AuditLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,11 +33,14 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
             entity.Property(e => e.PasswordHash).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.ExtId).HasMaxLength(255);
+            entity.Property(e => e.DepartmentPendingAssign).HasDefaultValue(false);
             entity.HasOne(e => e.Department)
                   .WithMany(d => d.Users)
                   .HasForeignKey(e => e.DepartmentId)
                   .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(e => e.Email).IsUnique();
+            entity.HasIndex(e => e.ExtId).IsUnique();
         });
 
         // Department configuration
@@ -175,6 +180,48 @@ public class AppDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // UserDepartment configuration
+        modelBuilder.Entity<UserDepartment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasOne(e => e.User)
+                  .WithMany(u => u.UserDepartments)
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Department)
+                  .WithMany()
+                  .HasForeignKey(e => e.DepartmentId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.AssignedBy)
+                  .WithMany()
+                  .HasForeignKey(e => e.AssignedByUserId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(e => new { e.UserId, e.DepartmentId }).IsUnique();
+        });
+
+        // AuditLog configuration
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ActionType).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.EntityName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.OldValue).HasMaxLength(2000);
+            entity.Property(e => e.NewValue).HasMaxLength(2000);
+            entity.Property(e => e.Description).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.IpAddress).HasMaxLength(45);
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.PerformedBy)
+                  .WithMany()
+                  .HasForeignKey(e => e.PerformedByUserId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.PerformedAt);
+            entity.HasIndex(e => new { e.EntityName, e.EntityId });
+        });
+
         // Seed data
         SeedData(modelBuilder);
     }
@@ -208,7 +255,7 @@ public class AppDbContext : DbContext
                 Email = "admin@deskiq.com",
                 PasswordHash = adminPasswordHash,
                 DepartmentId = adminDeptId,
-                Role = UserRole.Admin,
+                Role = UserRole.Administrador,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow

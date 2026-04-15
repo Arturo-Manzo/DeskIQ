@@ -1,23 +1,45 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Ticket } from '../../core/models/ticket.models';
+import { Ticket, TicketViewScope } from '../../core/models/ticket.models';
 import { TicketService } from '../../core/services/ticket.service';
+import { PermissionService } from '../../core/services/permission.service';
 import { getTicketStatusLabel, getTicketPriorityLabel } from '../../core/models/ticket.models';
+import { ButtonDirective } from 'ui-design-system';
 
 @Component({
   selector: 'app-tickets-page',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ButtonDirective],
   templateUrl: './tickets-page.component.html',
 })
 export class TicketsPageComponent {
   private readonly ticketsApi = inject(TicketService);
+  private readonly permissions = inject(PermissionService);
 
   readonly loading = signal(true);
   readonly tickets = signal<Ticket[]>([]);
   readonly error = signal<string | null>(null);
   readonly search = signal('');
+  readonly currentScope = signal<TicketViewScope>(TicketViewScope.Departamento);
+  readonly availableScopes = computed(() => {
+    const role = this.permissions.getCurrentUserRole();
+    switch (role) {
+      case 1: // UserRole.Cliente
+        return [TicketViewScope.MisTickets];
+      case 2: // UserRole.ClienteSupervisor
+      case 3: // UserRole.Operador
+      case 4: // UserRole.OperadorSupervisor
+        return [TicketViewScope.MisTickets, TicketViewScope.Departamento];
+      case 5: // UserRole.SupervisorGeneral
+      case 6: // UserRole.Auditor
+      case 7: // UserRole.Administrador
+        return [TicketViewScope.MisTickets, TicketViewScope.Departamento, TicketViewScope.Todos];
+      default:
+        return [TicketViewScope.Departamento];
+    }
+  });
+  readonly canCreateTicket = computed(() => this.permissions.canCreateTicket());
   readonly filteredTickets = computed(() => {
     const query = this.search().trim().toLowerCase();
     if (!query) {
@@ -45,7 +67,9 @@ export class TicketsPageComponent {
   load(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.ticketsApi.getTickets(1, 100).subscribe({
+    const defaultScope = this.getDefaultScopeForRole();
+    this.currentScope.set(defaultScope);
+    this.ticketsApi.getTickets(1, 100, this.currentScope()).subscribe({
       next: (result) => {
         this.tickets.set(result);
         this.loading.set(false);
@@ -55,6 +79,29 @@ export class TicketsPageComponent {
         this.loading.set(false);
       },
     });
+  }
+
+  onScopeChange(scope: TicketViewScope): void {
+    this.currentScope.set(scope);
+    this.load();
+  }
+
+  private getDefaultScopeForRole(): TicketViewScope {
+    const role = this.permissions.getCurrentUserRole();
+    switch (role) {
+      case 1: // UserRole.Cliente
+        return TicketViewScope.MisTickets;
+      case 2: // UserRole.ClienteSupervisor
+      case 3: // UserRole.Operador
+      case 4: // UserRole.OperadorSupervisor
+        return TicketViewScope.Departamento;
+      case 5: // UserRole.SupervisorGeneral
+      case 6: // UserRole.Auditor
+      case 7: // UserRole.Administrador
+        return TicketViewScope.Todos;
+      default:
+        return TicketViewScope.Departamento;
+    }
   }
 
   onSearchChange(value: string): void {
@@ -67,5 +114,18 @@ export class TicketsPageComponent {
 
   getPriorityLabel(priority: number): string {
     return getTicketPriorityLabel(priority);
+  }
+
+  getScopeLabel(scope: TicketViewScope): string {
+    switch (scope) {
+      case TicketViewScope.MisTickets:
+        return 'Mis Tickets';
+      case TicketViewScope.Departamento:
+        return 'Departamento';
+      case TicketViewScope.Todos:
+        return 'Todos';
+      default:
+        return 'Departamento';
+    }
   }
 }

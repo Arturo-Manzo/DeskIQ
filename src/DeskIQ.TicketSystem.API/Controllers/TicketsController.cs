@@ -25,6 +25,8 @@ public class TicketsController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly ITicketActivityService _activityService;
     private readonly TicketService _ticketService;
+    private readonly PermissionService _permissionService;
+    private readonly AuditService _auditService;
 
     public TicketsController(
         AppDbContext context,
@@ -33,7 +35,9 @@ public class TicketsController : ControllerBase
         IOptions<FileStorageSettings> fileStorageSettings,
         IConfiguration configuration,
         ITicketActivityService activityService,
-        TicketService ticketService)
+        TicketService ticketService,
+        PermissionService permissionService,
+        AuditService auditService)
     {
         _context = context;
         _ticketIdGenerator = ticketIdGenerator;
@@ -42,6 +46,8 @@ public class TicketsController : ControllerBase
         _configuration = configuration;
         _activityService = activityService;
         _ticketService = ticketService;
+        _permissionService = permissionService;
+        _auditService = auditService;
     }
 
     [HttpGet]
@@ -49,12 +55,13 @@ public class TicketsController : ControllerBase
         [FromQuery] Guid? departmentId = null,
         [FromQuery] TicketStatus? status = null,
         [FromQuery] Guid? assignedToId = null,
+        [FromQuery] TicketViewScope? scope = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var query = _context.Tickets
             .Include(t => t.CreatedBy)
@@ -62,9 +69,34 @@ public class TicketsController : ControllerBase
             .Include(t => t.Department)
             .AsQueryable();
 
-        if (currentUser.Role != UserRole.Admin)
+        // Determinar scope por defecto según rol si no se especifica
+        var effectiveScope = scope ?? GetDefaultScopeForRole(currentUser.Role);
+
+        if (currentUser.Role != UserRole.Administrador)
         {
-            query = query.Where(t => t.DepartmentId == currentUser.DepartmentId);
+            var accessibleDeptIds = await _permissionService.GetUserAccessibleDepartmentIdsAsync(currentUser.Id);
+
+            switch (effectiveScope)
+            {
+                case TicketViewScope.MisTickets:
+                    query = query.Where(t => t.CreatedById == currentUser.Id);
+                    break;
+                case TicketViewScope.Departamento:
+                    query = query.Where(t => accessibleDeptIds.Contains(t.DepartmentId));
+                    break;
+                case TicketViewScope.Todos:
+                    // Solo para roles multi-departamento
+                    if (currentUser.Role != UserRole.SupervisorGeneral &&
+                        currentUser.Role != UserRole.Auditor)
+                    {
+                        throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para ver todos los tickets.");
+                    }
+                    query = query.Where(t => accessibleDeptIds.Contains(t.DepartmentId));
+                    break;
+                default:
+                    query = query.Where(t => accessibleDeptIds.Contains(t.DepartmentId));
+                    break;
+            }
         }
 
         if (departmentId.HasValue)
@@ -85,19 +117,34 @@ public class TicketsController : ControllerBase
         return Ok(tickets);
     }
 
+    private TicketViewScope GetDefaultScopeForRole(UserRole role)
+    {
+        return role switch
+        {
+            UserRole.Cliente => TicketViewScope.MisTickets,
+            UserRole.ClienteSupervisor => TicketViewScope.Departamento,
+            UserRole.Operador => TicketViewScope.Departamento,
+            UserRole.OperadorSupervisor => TicketViewScope.Departamento,
+            UserRole.SupervisorGeneral => TicketViewScope.Todos,
+            UserRole.Auditor => TicketViewScope.Todos,
+            UserRole.Administrador => TicketViewScope.Todos,
+            _ => TicketViewScope.Departamento
+        };
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<Ticket>> GetTicket(Guid id)
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var ticket = await _ticketService.GetTicketWithDetailsAsync(id);
         if (ticket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
-        if (!TicketService.CanViewTicket(currentUser, ticket))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanViewTicket(currentUser, ticket))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         return Ok(ticket);
     }
@@ -107,15 +154,15 @@ public class TicketsController : ControllerBase
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var isValid = await _ticketService.ValidateTicketCreationAsync(request.DepartmentId, currentUser);
         if (!isValid)
-            throw new BadRequestException(ErrorCodes.INVALID_DEPARTMENT, "Department not found or access denied");
+            throw new BadRequestException(ErrorCodes.INVALID_DEPARTMENT, "Departamento no encontrado o acceso denegado.");
 
         var department = await _ticketService.GetDepartmentAsync(request.DepartmentId);
         if (department == null)
-            throw new NotFoundException(ErrorCodes.DEPARTMENT_NOT_FOUND, "Department not found");
+            throw new NotFoundException(ErrorCodes.DEPARTMENT_NOT_FOUND, "Departamento no encontrado");
 
         var createdAt = DateTime.UtcNow;
         var ticketId = await _ticketIdGenerator.GenerateNextAsync(
@@ -151,19 +198,114 @@ public class TicketsController : ControllerBase
         return CreatedAtAction(nameof(GetTicket), new { id = ticket.Id }, ticket);
     }
 
+    [HttpPost("with-attachments")]
+    [RequestFormLimits(MultipartBodyLengthLimit = 104857600)] // 100MB limit
+    [RequestSizeLimit(104857600)]
+    public async Task<ActionResult<Ticket>> CreateTicketWithAttachments(
+        [FromForm] CreateTicketWithAttachmentsRequest request)
+    {
+        var currentUser = await GetCurrentActiveUserAsync();
+        if (currentUser == null)
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
+
+        var isValid = await _ticketService.ValidateTicketCreationAsync(request.DepartmentId, currentUser);
+        if (!isValid)
+            throw new BadRequestException(ErrorCodes.INVALID_DEPARTMENT, "Departamento no encontrado o acceso denegado.");
+
+        var department = await _ticketService.GetDepartmentAsync(request.DepartmentId);
+        if (department == null)
+            throw new NotFoundException(ErrorCodes.DEPARTMENT_NOT_FOUND, "Departamento no encontrado");
+
+        var createdAt = DateTime.UtcNow;
+        var ticketId = await _ticketIdGenerator.GenerateNextAsync(
+            request.DepartmentId,
+            department.Code,
+            createdAt);
+
+        var ticket = new Ticket
+        {
+            Id = Guid.NewGuid(),
+            TicketId = ticketId,
+            Title = request.Title,
+            Description = request.Description,
+            Status = TicketStatus.Open,
+            Priority = request.Priority,
+            CreatedById = currentUser.Id,
+            DepartmentId = request.DepartmentId,
+            Source = request.Source,
+            ExternalId = request.ExternalId,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+
+        _context.Tickets.Add(ticket);
+        await _context.SaveChangesAsync();
+
+        // Handle file attachments
+        if (request.Attachments != null && request.Attachments.Count > 0)
+        {
+            var allowedExtensionsConfig = _configuration["FileUpload:AllowedExtensions"] ?? ".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.txt,.csv";
+            var maxFilesPerTicket = int.Parse(_configuration["FileUpload:MaxFilesPerTicket"] ?? "10");
+
+            if (request.Attachments.Count > maxFilesPerTicket)
+                throw new BadRequestException(ErrorCodes.VALIDATION_ERROR, $"Maximum {maxFilesPerTicket} files allowed per ticket");
+
+            foreach (var file in request.Attachments)
+            {
+                if (file == null || file.Length == 0)
+                    continue;
+
+                var isFileValid = await _ticketService.ValidateAttachmentUploadAsync(file.Length, file.FileName, allowedExtensionsConfig, _fileStorageSettings.MaxFileSize);
+                if (!isFileValid)
+                {
+                    if (file.Length > _fileStorageSettings.MaxFileSize)
+                        throw new BadRequestException(ErrorCodes.FILE_SIZE_EXCEEDED, $"El tamaño del archivo excede el máximo permitido de {_fileStorageSettings.MaxFileSize / (1024 * 1024)}MB");
+                    
+                    var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+                    throw new BadRequestException(ErrorCodes.FILE_EXTENSION_NOT_ALLOWED, $"La extensión de archivo {fileExtension} no está permitida");
+                }
+
+                // Save file to disk
+                var relativePath = await _fileStorageService.SaveAttachmentAsync(ticket.Id, file, currentUser.Id);
+
+                // Create attachment record
+                var attachment = new TicketAttachment
+                {
+                    Id = Guid.NewGuid(),
+                    TicketId = ticket.Id,
+                    FileName = file.FileName,
+                    FilePath = relativePath,
+                    ContentType = file.ContentType,
+                    FileSize = file.Length,
+                    UploadedById = currentUser.Id,
+                    UploadedAt = DateTime.UtcNow
+                };
+
+                _context.TicketAttachments.Add(attachment);
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        // Log activity
+        await _activityService.LogActivityAsync(ticket.Id, ActivityType.TicketCreated, currentUser.Id, "Ticket creado");
+
+        return CreatedAtAction(nameof(GetTicket), new { id = ticket.Id }, ticket);
+    }
+
     [HttpGet("{id}/subtickets")]
     public async Task<ActionResult<IEnumerable<Ticket>>> GetSubtickets(Guid id)
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var parentTicket = await _ticketService.GetTicketAsync(id);
         if (parentTicket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
-        if (!TicketService.CanViewTicket(currentUser, parentTicket))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanViewTicket(currentUser, parentTicket))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         var subtickets = await _context.Tickets
             .Include(t => t.AssignedTo)
@@ -178,29 +320,29 @@ public class TicketsController : ControllerBase
     public async Task<ActionResult<Ticket>> CreateSubticket(Guid id, [FromBody] CreateSubticketRequest request)
     {
         if (request.IsBlocked && string.IsNullOrWhiteSpace(request.BlockedReason))
-            throw new BadRequestException(ErrorCodes.BLOCKED_REASON_REQUIRED, "Blocked reason is required when subticket is blocked");
+            throw new BadRequestException(ErrorCodes.BLOCKED_REASON_REQUIRED, "Se requiere el motivo del bloqueo cuando el subticket está bloqueado");
 
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var isValid = await _ticketService.ValidateSubticketCreationAsync(id, request.IsBlocked, request.BlockedReason);
         if (!isValid)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Parent ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket padre no encontrado");
 
         var parentTicket = await _context.Tickets
             .Include(t => t.Department)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (parentTicket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Parent ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket padre no encontrado");
 
-        if (!TicketService.CanViewTicket(currentUser, parentTicket))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanViewTicket(currentUser, parentTicket))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         var department = await _ticketService.GetDepartmentAsync(parentTicket.DepartmentId);
         if (department == null)
-            throw new NotFoundException(ErrorCodes.DEPARTMENT_NOT_FOUND, "Department not found");
+            throw new NotFoundException(ErrorCodes.DEPARTMENT_NOT_FOUND, "Departamento no encontrado");
 
         var createdAt = DateTime.UtcNow;
         var ticketId = await _ticketIdGenerator.GenerateNextAsync(
@@ -256,11 +398,11 @@ public class TicketsController : ControllerBase
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var ticket = await _ticketService.GetTicketAsync(id);
         if (ticket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
         var validationRequest = new UpdateTicketValidationRequest
         {
@@ -271,12 +413,27 @@ public class TicketsController : ControllerBase
             CloseOpenSubticketsWithParent = request.CloseOpenSubticketsWithParent
         };
 
-        if (!TicketService.CanUpdateTicket(currentUser, ticket, validationRequest))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanUpdateTicket(currentUser, ticket, validationRequest))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         var (isValid, errorMessage) = await _ticketService.ValidateTicketUpdateAsync(ticket, validationRequest);
         if (!isValid)
-            throw new BadRequestException(ErrorCodes.VALIDATION_ERROR, errorMessage ?? "Validation failed");
+            throw new BadRequestException(ErrorCodes.VALIDATION_ERROR, errorMessage ?? "Validación fallida");
+
+        // Validate assignment permission
+        if (request.AssignedToId.HasValue && request.AssignedToId.Value != ticket.AssignedToId)
+        {
+            if (!_ticketService.CanAssignTicket(currentUser, ticket, request.AssignedToId))
+                throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para asignar este ticket.");
+        }
+
+        // Validate title/description editing permission
+        var isEditingTitleOrDescription = !string.IsNullOrWhiteSpace(request.Title) || !string.IsNullOrWhiteSpace(request.Description);
+        if (isEditingTitleOrDescription)
+        {
+            if (!_permissionService.CanEditTicketTitleDescription(currentUser, ticket))
+                throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para editar el título o descripción de este ticket.");
+        }
 
         var wantsToCloseParent = ticket.ParentTicketId == null &&
             (request.Status == TicketStatus.Resolved || request.Status == TicketStatus.Closed);
@@ -311,6 +468,30 @@ public class TicketsController : ControllerBase
                 ? null
                 : request.BlockedReason ?? ticket.BlockedReason;
         ticket.UpdatedAt = DateTime.UtcNow;
+
+        // Log title change
+        if (!string.IsNullOrWhiteSpace(request.Title) && request.Title != ticket.Title)
+        {
+            await _activityService.LogActivityAsync(
+                ticket.Id,
+                ActivityType.TitleChanged,
+                currentUser.Id,
+                "Título cambiado",
+                ticket.Title,
+                request.Title);
+        }
+
+        // Log description change
+        if (!string.IsNullOrWhiteSpace(request.Description) && request.Description != ticket.Description)
+        {
+            await _activityService.LogActivityAsync(
+                ticket.Id,
+                ActivityType.DescriptionChanged,
+                currentUser.Id,
+                "Descripción cambiada",
+                ticket.Description.Length > 50 ? ticket.Description.Substring(0, 50) + "..." : ticket.Description,
+                request.Description.Length > 50 ? request.Description.Substring(0, 50) + "..." : request.Description);
+        }
 
         // Log status change
         if (request.Status.HasValue && request.Status.Value != ticket.Status)
@@ -378,19 +559,19 @@ public class TicketsController : ControllerBase
     public async Task<IActionResult> BlockTicket(Guid id, [FromBody] BlockTicketRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Reason))
-            throw new BadRequestException(ErrorCodes.VALIDATION_ERROR, "Reason is required");
+            throw new BadRequestException(ErrorCodes.VALIDATION_ERROR, "Se requiere el motivo");
 
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var ticket = await _ticketService.GetTicketAsync(id);
         if (ticket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
         var validationRequest = new UpdateTicketValidationRequest();
-        if (!TicketService.CanUpdateTicket(currentUser, ticket, validationRequest))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanUpdateTicket(currentUser, ticket, validationRequest))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         ticket.IsBlocked = true;
         ticket.BlockedReason = request.Reason.Trim();
@@ -420,15 +601,15 @@ public class TicketsController : ControllerBase
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var ticket = await _ticketService.GetTicketAsync(id);
         if (ticket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
         var validationRequest = new UpdateTicketValidationRequest();
-        if (!TicketService.CanUpdateTicket(currentUser, ticket, validationRequest))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanUpdateTicket(currentUser, ticket, validationRequest))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         ticket.IsBlocked = false;
         ticket.BlockedReason = null;
@@ -462,27 +643,27 @@ public class TicketsController : ControllerBase
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var ticket = await _ticketService.GetTicketAsync(id);
         if (ticket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
-        if (!TicketService.CanViewTicket(currentUser, ticket))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanViewTicket(currentUser, ticket))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         if (file == null || file.Length == 0)
-            throw new BadRequestException(ErrorCodes.NO_FILE_PROVIDED, "No file provided");
+            throw new BadRequestException(ErrorCodes.NO_FILE_PROVIDED, "No se proporcionó ningún archivo");
 
         var allowedExtensionsConfig = _configuration["FileUpload:AllowedExtensions"] ?? ".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.txt,.csv";
         var isValid = await _ticketService.ValidateAttachmentUploadAsync(file.Length, file.FileName, allowedExtensionsConfig, _fileStorageSettings.MaxFileSize);
         if (!isValid)
         {
             if (file.Length > _fileStorageSettings.MaxFileSize)
-                throw new BadRequestException(ErrorCodes.FILE_SIZE_EXCEEDED, $"File size exceeds maximum allowed size of {_fileStorageSettings.MaxFileSize / (1024 * 1024)}MB");
+                throw new BadRequestException(ErrorCodes.FILE_SIZE_EXCEEDED, $"El tamaño del archivo excede el máximo permitido de {_fileStorageSettings.MaxFileSize / (1024 * 1024)}MB");
             
             var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            throw new BadRequestException(ErrorCodes.FILE_EXTENSION_NOT_ALLOWED, $"File extension {fileExtension} is not allowed");
+            throw new BadRequestException(ErrorCodes.FILE_EXTENSION_NOT_ALLOWED, $"La extensión de archivo {fileExtension} no está permitida");
         }
 
         // Save file to disk
@@ -516,20 +697,20 @@ public class TicketsController : ControllerBase
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var ticket = await _ticketService.GetTicketAsync(id);
         if (ticket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
-        if (!TicketService.CanViewTicket(currentUser, ticket))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanViewTicket(currentUser, ticket))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         var attachment = await _context.TicketAttachments
             .FirstOrDefaultAsync(a => a.Id == attachmentId && a.TicketId == id);
 
         if (attachment == null)
-            throw new NotFoundException(ErrorCodes.ATTACHMENT_NOT_FOUND, "Attachment not found");
+            throw new NotFoundException(ErrorCodes.ATTACHMENT_NOT_FOUND, "Archivo adjunto no encontrado");
 
         var filePath = _fileStorageService.GetFullFilePath(attachment.FilePath);
 
@@ -542,7 +723,7 @@ public class TicketsController : ControllerBase
             
             throw new NotFoundException(
                 ErrorCodes.FILE_NOT_FOUND, 
-                $"File not found on disk. Expected path: {filePath}, Directory exists: {pathExists}, BasePath: {basePath}");
+                $"Archivo no encontrado en disco. Ruta esperada: {filePath}, Directorio existe: {pathExists}, BasePath: {basePath}");
         }
 
         var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
@@ -554,21 +735,21 @@ public class TicketsController : ControllerBase
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var ticket = await _ticketService.GetTicketAsync(id);
         if (ticket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
         var validationRequest = new UpdateTicketValidationRequest();
-        if (!TicketService.CanUpdateTicket(currentUser, ticket, validationRequest))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanUpdateTicket(currentUser, ticket, validationRequest))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         var attachment = await _context.TicketAttachments
             .FirstOrDefaultAsync(a => a.Id == attachmentId && a.TicketId == id);
 
         if (attachment == null)
-            throw new NotFoundException(ErrorCodes.ATTACHMENT_NOT_FOUND, "Attachment not found");
+            throw new NotFoundException(ErrorCodes.ATTACHMENT_NOT_FOUND, "Archivo adjunto no encontrado");
 
         // Delete file from disk
         await _fileStorageService.DeleteAttachmentAsync(attachmentId);
@@ -589,14 +770,14 @@ public class TicketsController : ControllerBase
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var ticket = await _ticketService.GetTicketAsync(id);
         if (ticket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
-        if (!TicketService.CanCommentTicket(currentUser, ticket))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanCommentTicket(currentUser, ticket))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         var isValid = await _ticketService.ValidateMessageAdditionAsync(request.ParentMessageId, id);
         if (!isValid)
@@ -606,9 +787,9 @@ public class TicketsController : ControllerBase
                 var parentMessage = await _context.TicketMessages
                     .FirstOrDefaultAsync(m => m.Id == request.ParentMessageId.Value);
                 if (parentMessage == null)
-                    throw new BadRequestException(ErrorCodes.PARENT_MESSAGE_NOT_FOUND, "Parent message not found");
+                    throw new BadRequestException(ErrorCodes.PARENT_MESSAGE_NOT_FOUND, "Mensaje padre no encontrado");
                 else
-                    throw new BadRequestException(ErrorCodes.PARENT_MESSAGE_MISMATCH, "Parent message does not belong to this ticket");
+                    throw new BadRequestException(ErrorCodes.PARENT_MESSAGE_MISMATCH, "El mensaje padre no pertenece a este ticket");
             }
         }
 
@@ -641,17 +822,89 @@ public class TicketsController : ControllerBase
     {
         var currentUser = await GetCurrentActiveUserAsync();
         if (currentUser == null)
-            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Authenticated user not found");
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
 
         var ticket = await _ticketService.GetTicketAsync(id);
         if (ticket == null)
-            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket not found");
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
 
-        if (!TicketService.CanViewTicket(currentUser, ticket))
-            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "Access denied");
+        if (!_ticketService.CanViewTicket(currentUser, ticket))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para realizar esta acción.");
 
         var activities = await _activityService.GetActivitiesAsync(id, page, pageSize);
         return Ok(activities);
+    }
+
+    [HttpPut("{id}/department")]
+    public async Task<IActionResult> ChangeTicketDepartment(Guid id, [FromBody] ChangeTicketDepartmentRequest request)
+    {
+        var currentUser = await GetCurrentActiveUserAsync();
+        if (currentUser == null)
+            throw new UnauthorizedException(ErrorCodes.UNAUTHORIZED, "Usuario autenticado no encontrado");
+
+        var ticket = await _ticketService.GetTicketAsync(id);
+        if (ticket == null)
+            throw new NotFoundException(ErrorCodes.TICKET_NOT_FOUND, "Ticket no encontrado");
+
+        if (!_permissionService.CanChangeTicketDepartment(currentUser, ticket))
+            throw new ForbiddenException(ErrorCodes.FORBIDDEN, "No tienes permisos para cambiar el departamento de este ticket");
+
+        var newDepartment = new Department();
+
+        var (isValid, errorMessage) = await _ticketService.ValidateDepartmentChangeAsync(ticket, request.NewDepartmentId);
+        if (!isValid)
+        {
+            // Log failed attempt to audit
+            newDepartment = await _ticketService.GetDepartmentAsync(request.NewDepartmentId);
+            await _auditService.LogTicketDepartmentChangeAttemptAsync(
+                ticket.Id,
+                request.NewDepartmentId,
+                newDepartment?.Name ?? "Unknown",
+                currentUser.Id,
+                errorMessage ?? "Validation failed",
+                HttpContext.Connection.RemoteIpAddress?.ToString());
+
+            // Log failed attempt to activity history for visibility
+            await _activityService.LogActivityAsync(
+                ticket.Id,
+                ActivityType.DepartmentChangeAttempt,
+                currentUser.Id,
+                errorMessage ?? "Validation failed",
+                ticket.Department?.Name,
+                newDepartment?.Name);
+
+            throw new BadRequestException(ErrorCodes.VALIDATION_ERROR, errorMessage ?? "Validación fallida");
+        }
+
+        var oldDepartmentId = ticket.DepartmentId;
+        var oldDepartment = ticket.Department;
+
+        ticket.DepartmentId = request.NewDepartmentId;
+        ticket.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        // Log successful change
+        newDepartment = await _ticketService.GetDepartmentAsync(request.NewDepartmentId);
+        await _auditService.LogTicketDepartmentChangeAsync(
+            ticket.Id,
+            oldDepartmentId,
+            oldDepartment?.Name ?? "Unknown",
+            request.NewDepartmentId,
+            newDepartment?.Name ?? "Unknown",
+            currentUser.Id,
+            HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        // Log activity
+        await _activityService.LogActivityAsync(
+            ticket.Id,
+            ActivityType.DepartmentChanged,
+            currentUser.Id,
+            "Departamento cambiado",
+            oldDepartment?.Name,
+            newDepartment?.Name);
+
+        return NoContent();
     }
 
     private async Task<User?> GetCurrentActiveUserAsync()
@@ -724,4 +977,15 @@ public class BlockTicketRequest
 public class UnblockTicketRequest
 {
     public string? ResolutionNotes { get; set; }
+}
+
+public class CreateTicketWithAttachmentsRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public TicketPriority Priority { get; set; }
+    public Guid DepartmentId { get; set; }
+    public TicketSource Source { get; set; }
+    public string? ExternalId { get; set; }
+    public IList<IFormFile> Attachments { get; set; } = new List<IFormFile>();
 }

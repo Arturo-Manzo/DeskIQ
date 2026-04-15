@@ -29,5 +29,9 @@ public enum ActivityType
     TicketResolved = 9,
     TicketClosed = 10,
     TicketReopened = 11,
-    CommentAdded = 12
+    CommentAdded = 12,
+    DepartmentChanged = 13,
+    DepartmentChangeAttempt = 14,
+    TitleChanged = 15,
+    DescriptionChanged = 16
 }

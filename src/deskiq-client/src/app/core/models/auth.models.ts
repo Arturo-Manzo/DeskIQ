@@ -1,7 +1,11 @@
 export enum UserRole {
-  Agent = 1,
-  Supervisor = 2,
-  Admin = 3,
+  Cliente = 1,
+  ClienteSupervisor = 2,
+  Operador = 3,
+  OperadorSupervisor = 4,
+  SupervisorGeneral = 5,
+  Auditor = 6,
+  Administrador = 7,
 }
 
 export interface DepartmentDto {

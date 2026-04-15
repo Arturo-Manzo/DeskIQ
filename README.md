@@ -12,6 +12,9 @@ Sistema de tickets empresarial multicanal construido con .NET 8, PostgreSQL y An
 - **Redis** para caché y sesiones
 - **SignalR** para comunicación en tiempo real
 - **JWT Authentication** con roles
+- **Control de acceso basado en roles (RBAC)** con 7 roles granulares
+- **Multi-departamento** para roles de supervisión
+- **Auditoría** completa de cambios administrativos
 - **Docker** para despliegue
 
 ## Arquitectura
@@ -47,6 +50,29 @@ docker compose --env-file .env up --build -d
 3. **Usuario por defecto**
 - Email: admin@deskiq.com
 - Password: Admin123!
+- Role: Administrador
+
+## Roles y Permisos
+
+El sistema implementa un control de acceso basado en roles (RBAC) con 7 roles granulares:
+
+### Roles Disponibles
+1. **Cliente** - Crea y ve solo sus propios tickets
+2. **Cliente Supervisor** - Ve todos los tickets de su departamento (solo lectura)
+3. **Operador** - Gestiona tickets en su departamento
+4. **Operador Supervisor** - Operador + acceso a métricas del departamento
+5. **Supervisor General** - Multi-departamento con filtros avanzados
+6. **Auditor** - Acceso multi-departamento de solo lectura con comentarios
+7. **Administrador** - Acceso completo de administración del sistema
+
+Para ver la matriz completa de permisos, consulte [ROLE_MATRIX.md](ROLE_MATRIX.md).
+
+### Migración de Roles
+- Agent → Operador
+- Supervisor → Operador Supervisor
+- Admin → Administrador
+
+Ejecute el script de migración: `init-scripts/05-role-refinement-migration.sql`
 
 ## Configuración Local
 

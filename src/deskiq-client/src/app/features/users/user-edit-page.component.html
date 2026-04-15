@@ -1,0 +1,201 @@
+<section class="ui-page">
+  <div class="ui-page__header">
+    <div>
+      <h1 class="ui-page__title">Editar Usuario</h1>
+      <p class="ui-page__subtitle">Actualice la información del usuario.</p>
+    </div>
+    <div class="ui-actions">
+      <button type="button" appButton="secondary" buttonSize="md" (click)="cancel()">
+        Cancelar
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="ui-card ui-card--padded flex items-center justify-center">
+      <div class="text-sm text-[var(--color-muted)]">Cargando usuario...</div>
+    </div>
+  } @else {
+    <article class="ui-card ui-card--padded">
+      @if (error()) {
+        <div class="ui-feedback ui-feedback--error mb-4">
+          <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+          </svg>
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-6">
+        <!-- Name -->
+        <div class="space-y-2">
+          <label for="name" class="ui-form-label">Nombre <span class="text-red-400">*</span></label>
+          <input
+            id="name"
+            type="text"
+            formControlName="name"
+            class="ui-input"
+            placeholder="Ej: Juan Pérez"
+          />
+          @if (nameControl?.invalid && nameControl?.touched) {
+            @if (nameControl?.errors?.['required']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El nombre es obligatorio.</span>
+              </div>
+            }
+            @if (nameControl?.errors?.['minlength']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El nombre debe tener al menos 2 caracteres.</span>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Email -->
+        <div class="space-y-2">
+          <label for="email" class="ui-form-label">Email <span class="text-red-400">*</span></label>
+          <input
+            id="email"
+            type="email"
+            formControlName="email"
+            class="ui-input"
+            placeholder="Ej: juan.perez@empresa.com"
+          />
+          @if (emailControl?.invalid && emailControl?.touched) {
+            @if (emailControl?.errors?.['required']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El email es obligatorio.</span>
+              </div>
+            }
+            @if (emailControl?.errors?.['email']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">El email no es válido.</span>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Password (optional for edit) -->
+        <div class="space-y-2">
+          <label for="password" class="ui-form-label">Contraseña (dejar vacío para no cambiar)</label>
+          <input
+            id="password"
+            type="password"
+            formControlName="password"
+            class="ui-input"
+            placeholder="Mínimo 6 caracteres"
+          />
+          @if (passwordControl?.invalid && passwordControl?.touched) {
+            @if (passwordControl?.errors?.['minlength']) {
+              <div class="ui-feedback ui-feedback--error mt-2">
+                <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs">La contraseña debe tener al menos 6 caracteres.</span>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Department -->
+        <div class="space-y-2">
+          <label for="departmentId" class="ui-form-label">Departamento <span class="text-red-400">*</span></label>
+          <select
+            id="departmentId"
+            formControlName="departmentId"
+            class="ui-input"
+          >
+            <option value="">Seleccione un departamento</option>
+            @for (dept of departments(); track dept.id) {
+              <option [ngValue]="dept.id">{{ dept.name }}</option>
+            }
+          </select>
+          @if (departmentIdControl?.invalid && departmentIdControl?.touched) {
+            <div class="ui-feedback ui-feedback--error mt-2">
+              <svg class="ui-feedback__icon" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              <span class="text-xs">El departamento es obligatorio.</span>
+            </div>
+          }
+        </div>
+
+        <!-- Role -->
+        <div class="space-y-2">
+          <label for="role" class="ui-form-label">Rol <span class="text-red-400">*</span></label>
+          <select
+            id="role"
+            formControlName="role"
+            class="ui-input"
+          >
+            <option [ngValue]="1">Cliente</option>
+            <option [ngValue]="2">Cliente Supervisor</option>
+            <option [ngValue]="3">Operador</option>
+            <option [ngValue]="4">Operador Supervisor</option>
+            <option [ngValue]="5">Supervisor General</option>
+            <option [ngValue]="6">Auditor</option>
+            <option [ngValue]="7">Administrador</option>
+          </select>
+        </div>
+
+        <!-- IsActive -->
+        <div class="flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="isActive"
+            formControlName="isActive"
+            class="w-4 h-4 text-blue-600 rounded"
+          />
+          <label for="isActive" class="text-sm font-medium text-gray-700">
+            Usuario activo
+          </label>
+        </div>
+        <p class="text-xs text-[var(--color-muted)] ml-7">
+          Desmarque esta opción para desactivar el usuario. Los usuarios inactivos no pueden iniciar sesión.
+        </p>
+
+        <!-- Submit Button -->
+        <div class="flex justify-end gap-3 pt-4">
+          <button
+            type="button"
+            appButton="secondary"
+            buttonSize="md"
+            (click)="cancel()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            appButton="primary"
+            buttonSize="md"
+            [disabled]="submitting() || form.invalid"
+          >
+            @if (submitting()) {
+              <span class="flex items-center gap-2">
+                <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Guardando...
+              </span>
+            } @else {
+              Guardar Cambios
+            }
+          </button>
+        </div>
+      </form>
+    </article>
+  }
+</section>

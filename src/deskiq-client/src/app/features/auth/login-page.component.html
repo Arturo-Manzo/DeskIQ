@@ -79,7 +79,9 @@
 
       <button
         type="submit"
-        class="ui-button ui-button--primary w-full rounded-xl active:scale-[0.99]"
+        appButton="primary"
+        buttonSize="md"
+        class="w-full rounded-xl active:scale-[0.99]"
         [disabled]="isLoading() || form.invalid"
       >
         {{ isLoading() ? 'Validando...' : 'Entrar' }}
