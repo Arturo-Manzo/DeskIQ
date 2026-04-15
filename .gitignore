@@ -81,6 +81,9 @@ any_ia_output/
 # === Miscellaneous/coverage/tmp===
 coverage/
 tmp/
+Docs/
+dev-scripts/
+src/DeskIQ.TicketSystem.API/uploads
 
 # === In-source/in-project ignores (defense in depth, not necessary if covered above) ===
 /DeskIQ.TicketSystem.sln
